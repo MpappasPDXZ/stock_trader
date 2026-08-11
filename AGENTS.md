@@ -4,17 +4,17 @@ Guidance for AI agents (and humans) working in this repo. **CRM is the prototype
 
 ## Project in one paragraph
 
-**One script:** `market_ml_analysis.ipynb`. It builds a **session-close feature frame**, trains **Lasso** (next log return) + **XGBoost** (next close up/down) with **walk-forward** discipline, then:
+**One ideation surface:** `market_ml_analysis.ipynb`. **Batch / parallel runner:** `run_market_ml.py` executes the same core stages for many tickers. The notebook builds a **session-close feature frame**, trains **Lasso** (next log return) + **XGBoost** (next close up/down) with **walk-forward** discipline, then:
 
 1. **Calibrates** a long-entry threshold so buy-in accuracy beats coin-flip **and** the population base UP rate.
 2. **Scores a target session** (usually tomorrow / clock-aware horizon).
 3. Writes charts + JSON under that run’s folder.
 
-No second analysis script. Feature ideation and thr picking for a new stock all happen in this notebook by changing config and re-running stages.
+Feature ideation and thr picking remain in the notebook. Multi-ticker production uses `run_market_ml.py` (stages extracted from the notebook — not a second feature stack). After notebook stage edits: `python -m market_ml.extract`.
 
-### Charts — only via notebook functions
+### Charts — only via `plot_*` functions
 
-**Every PNG under `improves_*` must be produced by calling a `plot_*` function defined in `market_ml_analysis.ipynb`.**  
+**Every PNG under `improves_*` must be produced by calling a `plot_*` function defined in the notebook (and the same functions as run by `market_ml.pipeline`).**  
 Do **not** regenerate charts from one-off agent scripts, external `.py` plotters, or ad-hoc `matplotlib` outside those functions.
 
 | Function | Artifact |
@@ -32,7 +32,11 @@ To refresh a board: re-run the notebook stage that **calls** the function (or ca
 ## Repo layout
 
 ```
-market_ml_analysis.ipynb     # only pipeline / ideation surface
+market_ml_analysis.ipynb     # pipeline / feature ideation surface
+run_market_ml.py             # CLI: same core stages, many tickers in parallel
+market_ml/                   # production package (extracted from notebook)
+  pipeline.py                # stages + run_ticker / run_tickers
+  extract.py                 # re-sync pipeline.py from the notebook
 data/                        # OHLCV downloads & parquet caches (any ticker)
   cache_ohlcv_{TICKER}.parquet
   cache_ohlcv_hist_{TICKER}.parquet
@@ -53,7 +57,8 @@ AGENTS.md                    # this file
 |------|------|
 | `data/` | **Only** place for market data downloads / refreshable caches |
 | `improves_{TICKER}_{DATE}/` | Charts, thr scan, WF panels, buy/pred JSON for that stock + target session |
-| `market_ml_analysis.ipynb` | Setup → features → assemble → WF → **calibrate thr** → buy rule |
+| `market_ml_analysis.ipynb` | Setup → features → assemble → WF → **calibrate thr** → buy rule (ideation + charts) |
+| `run_market_ml.py` / `market_ml/` | Parallel multi-ticker runner over the **same** stages (not a second feature stack). After notebook edits: `python -m market_ml.extract` |
 
 Setup creates:
 
@@ -271,7 +276,7 @@ all later train steps use FEATURE_COLS only
 - Running buy decision from an **old** `entry_rule_80` after changing ticker/features without re-calibrating.
 - Treating raw `P(up) ≥ 0.5` as a trade when calibration uses **oriented** score + high thr.
 - Celebrating high thr precision on **n &lt; min_trades**.
-- Adding a second notebook/script for “experiments” instead of iterating in `market_ml_analysis.ipynb`.
+- Adding a second notebook or feature-stack script for “experiments” instead of iterating in `market_ml_analysis.ipynb` (batch runs belong in `run_market_ml.py`).
 
 ---
 
@@ -280,7 +285,8 @@ all later train steps use FEATURE_COLS only
 | Ask | Agent action |
 |-----|----------------|
 | Try feature X | Registry + builder in the one notebook; re-run assemble→calibrate→decide into `improves_{TICKER}_{DATE}/` |
-| Run ticker Y | Set `TICKER` + dates; full pipeline; caches in `data/`; deliver `02` + thr + pending |
+| Run ticker Y | Set `TICKER` + dates in notebook, or `python run_market_ml.py Y`; caches in `data/`; deliver `02` + thr + pending |
+| Many tickers | `python run_market_ml.py T1 T2 … --jobs N [--target YYYY-MM-DD] [--force-recalibrate]` → one process per ticker |
 | Tomorrow’s prediction | Refresh if needed; **always show `03_dir_hits` + decision card** from that run folder |
 | Tidy notebook | Keep registry contract and calibration gates; keep single-notebook contract |
 
