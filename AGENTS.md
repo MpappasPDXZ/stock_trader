@@ -122,7 +122,7 @@ Add a candidate column to **X**, keep labels fixed, re-evaluate discrimination +
 - Hard-code feature names into train loops (use `FEATURE_COLS`).
 - Leave stub “feature dropped” cells as the pattern for new work — add real builders only.
 - Ship a thr that never clears discrimination floors.
-- Write new parallel `.py` / second notebook for experiments — use this notebook.
+- Invent a new feature/thr stack outside the notebook — iterate features here; batch with `run_market_ml.py`.
 
 ---
 
