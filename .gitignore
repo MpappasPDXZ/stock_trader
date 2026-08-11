@@ -1,0 +1,26 @@
+# env / tooling
+.venv/
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+*.egg-info/
+.DS_Store
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# OHLCV downloads / caches
+data/*
+!data/.gitkeep
+
+# Per-run artifacts: improves_{TICKER}_{YYYY-MM-DD}/
+improves_*/
+
+# legacy flat output folder (pre-layout)
+output/
+
+# stray serialized models
+*.joblib
+*.pkl
