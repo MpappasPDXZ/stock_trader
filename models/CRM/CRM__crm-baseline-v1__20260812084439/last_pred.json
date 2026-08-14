@@ -1,0 +1,24 @@
+{
+  "ticker": "CRM",
+  "model_id": "CRM__crm-baseline-v1__20260812084439",
+  "target_session": "2026-08-12",
+  "feature_asof": "2026-08-11",
+  "close_asof": 197.47000122070312,
+  "xgb_prob_up": 0.48441994190216064,
+  "xgb_pred_up": 0,
+  "lasso_pred_logret": -0.0006050236093093468,
+  "lasso_implied_close": 197.35056334284562,
+  "lasso_pred_up": 0,
+  "auto_invert": true,
+  "entry_score": 0.5155800580978394,
+  "entry_score_min": 0.74,
+  "decision": "SKIP",
+  "rationale": "entry_score=51.6% < thr 74.0%  (raw P(up)=48.4%, inverted)",
+  "features": {
+    "rsi_14": 65.16807176439289,
+    "obv_chg_z_20": -1.113153007557719,
+    "bb_dist_lower": 0.15705207752509787,
+    "vol_ratio_7_21": 0.7260313280284838,
+    "near_high_200": 0.7375230500739036
+  }
+}

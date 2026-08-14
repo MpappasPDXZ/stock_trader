@@ -13,7 +13,10 @@ NOTEBOOK = REPO / "market_ml_analysis.ipynb"
 OUT = Path(__file__).resolve().parent / "pipeline.py"
 
 # Canonical production path (setup → buy rule / dir-hits). Optional full-WF cells excluded.
-PROD_CELLS = [2, 4, 6, 9, 10, 11, 12, 13, 14, 16, 18, 20, 22, 24]
+# NOTE: feat_adx, feat_candle, feat_fred stages are hand-added to pipeline.py
+# (not yet in the notebook). If re-extracting from notebook, these stages
+# will be missing — re-add them manually or add cells to the notebook first.
+PROD_CELLS = [2, 4, 6, 9, 10, 11, 12, 13, 15, 14, 16, 18, 20, 30, 22]
 
 STAGE_NAMES = {
     2: "setup",
@@ -24,12 +27,13 @@ STAGE_NAMES = {
     11: "feat_near_high",
     12: "feat_obv",
     13: "feat_bb",
+    15: "feat_trend",
     14: "assemble",
     16: "feature_health",
     18: "plot_01",
     20: "walkforward_pred",
-    22: "calibrate",
-    24: "buy_rule",
+    30: "calibrate",
+    22: "buy_rule",
 }
 
 
@@ -204,6 +208,10 @@ def build() -> str:
                 "feat_near_high",
                 "feat_obv",
                 "feat_bb",
+                "feat_trend",
+                "feat_adx",
+                "feat_candle",
+                "feat_fred",
                 "assemble",
                 "feature_health",
                 "plot_01",

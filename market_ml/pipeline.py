@@ -80,6 +80,7 @@ class RunConfig:
     skip_plot_01: bool = False
     n_jobs_model: int = 1
     quiet: bool = False
+    active_features: list[str] | None = None
 
 
 def _apply_overrides(cfg: RunConfig, g: dict[str, Any]) -> None:
@@ -177,6 +178,25 @@ FEAT_BB_SESSIONS = BB_WINDOW      # Bollinger lookback (ties BB_WINDOW)
 FEAT_VOL_RATIO_SHORT = 7          # short GK window (fast expansion)
 FEAT_VOL_RATIO_LONG = 21          # long GK baseline (vol_ratio = GK_short / GK_long)
 FEAT_NEAR_HIGH_SESSIONS = 200     # nearness to N-session peak high
+FEAT_TREND_SESSIONS = 21          # ATR-normalized log-return window (medium-horizon momentum)
+FEAT_ADX_SESSIONS = 14            # Wilder ADX / DI period (trend strength + directional spread)
+FEAT_BODY_EMA = 3                 # EMA smoothing for candle body ratio
+FEAT_WICK_EMA3 = 3                # EMA smoothing for wick_asymmetry (short)
+FEAT_WICK_EMA5 = 5                # EMA smoothing for wick_asymmetry (medium)
+FEAT_WICK_ROLL = 5                # rolling mean window for wick_asymmetry
+FEAT_STRESS_Z_WEEKS = 52          # STLFSI4 rolling z-score window (weeks → ~1 year of weekly data)
+
+# FRED macro feature series (fetched via pandas_datareader, forward-filled to trading sessions)
+FRED_SERIES = {
+    "GS10": "GS10",       # 10-yr Treasury yield (monthly)
+    "GS2": "GS2",         # 2-yr Treasury yield (monthly)
+    "TB3MS": "TB3MS",     # 3-month T-bill (monthly)
+    "CPIAUCSL": "CPIAUCSL",  # CPI index (monthly)
+    "STLFSI4": "STLFSI4",    # St. Louis Fed Financial Stress Index (weekly)
+    "WM2NS": "WM2NS",     # M2 money supply (weekly)
+    "GDP": "GDP",         # GDP (quarterly)
+}
+FRED_FETCH_YEARS_BACK = 12        # how many years of FRED history to fetch (need 52wk for stress z)
 
 FEATURE_MAX_SESSIONS = max(
     FEAT_RSI_SESSIONS + 1,
@@ -184,6 +204,11 @@ FEATURE_MAX_SESSIONS = max(
     FEAT_BB_SESSIONS,
     FEAT_VOL_RATIO_LONG,
     FEAT_NEAR_HIGH_SESSIONS,
+    FEAT_TREND_SESSIONS + 1,
+    FEAT_ADX_SESSIONS * 2,       # ADX needs ~2× period for Wilder smoothing warm-up
+    FEAT_BODY_EMA + 1,
+    FEAT_WICK_EMA5 + 1,
+    FEAT_WICK_ROLL,
 )
 
 # Calendar days of OHLCV *before* START so the first analysis session can fill
@@ -261,11 +286,11 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 # Buy rule (next-session close > feature-session close)
 # Operating long entry: oriented entry score (see Step 6b auto-invert if needed)
 # BUY_ENTRY_THR_MODE: composite = auto thr; manual = pin BUY_ENTRY_SCORE_MIN
-# composite score = W_PREC * rank_pct(buy-in precision) + W_GAIN * rank_pct(gain captured)
-# among thr with n_buys ≥ MIN_TRADES. Higher W_PREC tilts to accuracy over gain capture.
+# composite score = W_PREC * rank_pct(buy-in precision) + W_ER * rank_pct(E[r|buy])
+# among thr with n_buys ≥ MIN_TRADES. Higher W_PREC tilts to accuracy over per-trade edge.
 BUY_ENTRY_THR_MODE = "composite"
 BUY_ENTRY_COMPOSITE_W_PREC = 2.0   # weight on buy-in accuracy (was equal 1.0)
-BUY_ENTRY_COMPOSITE_W_GAIN = 1.0   # weight on % gain captured
+BUY_ENTRY_COMPOSITE_W_GAIN = 1.0   # weight on E[r|buy] = expected return per trade
 BUY_ENTRY_SCORE_MIN = 0.72       # used when mode=manual; set by scan when mode=composite
 BUY_XGB_PROB_MIN = BUY_ENTRY_SCORE_MIN  # alias for legacy plots
 BUY_REQUIRE_LASSO_UP = False     # if True, also need Lasso pred_logret > 0
@@ -306,11 +331,14 @@ print(
     f"VAL_WINDOW_SESSIONS={VAL_WINDOW_SESSIONS}  PREDICT_TARGET_DATE={PREDICT_TARGET_DATE}  "
     f"(auto, horizon={LIVE_HORIZON})"
 )
-print(f"BUY_ENTRY_THR_MODE={BUY_ENTRY_THR_MODE}  W_prec={BUY_ENTRY_COMPOSITE_W_PREC} W_gain={BUY_ENTRY_COMPOSITE_W_GAIN}  BUY_ENTRY_SCORE_MIN={BUY_ENTRY_SCORE_MIN}  BUY_REQUIRE_LASSO_UP={BUY_REQUIRE_LASSO_UP}")
+print(f"BUY_ENTRY_THR_MODE={BUY_ENTRY_THR_MODE}  W_prec={BUY_ENTRY_COMPOSITE_W_PREC} W_er={BUY_ENTRY_COMPOSITE_W_GAIN}  BUY_ENTRY_SCORE_MIN={BUY_ENTRY_SCORE_MIN}  BUY_REQUIRE_LASSO_UP={BUY_REQUIRE_LASSO_UP}")
 print(f"MIN_TRAIN_MONTHS={MIN_TRAIN_MONTHS}")
 print(
     "Features: rsi_14, obv_chg_z_20, bb_dist_lower, "
-    f"vol_ratio_{FEAT_VOL_RATIO_SHORT}_{FEAT_VOL_RATIO_LONG}, near_high_{FEAT_NEAR_HIGH_SESSIONS}"
+    f"vol_ratio_{FEAT_VOL_RATIO_SHORT}_{FEAT_VOL_RATIO_LONG}, near_high_{FEAT_NEAR_HIGH_SESSIONS}, "
+    f"med_term_{FEAT_TREND_SESSIONS}wk, "
+    f"adx_{FEAT_ADX_SESSIONS}, di_spread, body_ratio_ema{FEAT_BODY_EMA}, wick_asymmetry, "
+    f"fred_yield_slope, fred_stress_z, fred_real_yield, fred_marshallian_k"
 )
 print(
     f"Clock CST={_NOW_CST.strftime('%Y-%m-%d %H:%M %Z')}  "
@@ -492,6 +520,71 @@ FEATURE_SPECS = [
         "sessions_before_start": FEAT_NEAR_HIGH_SESSIONS,
         "title": f"Nearness to {FEAT_NEAR_HIGH_SESSIONS}d high (Close / peak High)",
     },
+    {
+        "name": f"med_term_{FEAT_TREND_SESSIONS}wk",
+        "sessions_before_start": FEAT_TREND_SESSIONS + 1,
+        "title": f"ATR-normalized {FEAT_TREND_SESSIONS}-session log return (medium-horizon momentum)",
+    },
+    {
+        "name": "adx_14",
+        "sessions_before_start": FEAT_ADX_SESSIONS * 2,
+        "title": f"Wilder ADX({FEAT_ADX_SESSIONS}) — trend strength regardless of direction",
+    },
+    {
+        "name": "di_spread",
+        "sessions_before_start": FEAT_ADX_SESSIONS * 2,
+        "title": f"+DI − −DI directional spread ({FEAT_ADX_SESSIONS}) — net directional pressure",
+    },
+    {
+        "name": "body_ratio_ema3",
+        "sessions_before_start": FEAT_BODY_EMA + 1,
+        "title": f"EMA({FEAT_BODY_EMA}) of |body|/range — candle conviction",
+    },
+    {
+        "name": "wick_asymmetry",
+        "sessions_before_start": 2,
+        "title": "(lower_wick − upper_wick)/range — candle rejection asymmetry",
+    },
+    {
+        "name": "wick_asym_ema3",
+        "sessions_before_start": FEAT_WICK_EMA3 + 1,
+        "title": f"EMA({FEAT_WICK_EMA3}) of wick_asymmetry — smoothed candle rejection",
+    },
+    {
+        "name": "wick_asym_ema5",
+        "sessions_before_start": FEAT_WICK_EMA5 + 1,
+        "title": f"EMA({FEAT_WICK_EMA5}) of wick_asymmetry — medium-smoothed candle rejection",
+    },
+    {
+        "name": "wick_asym_roll5",
+        "sessions_before_start": FEAT_WICK_ROLL,
+        "title": f"Rolling mean({FEAT_WICK_ROLL}) of wick_asymmetry — cumulative wick pressure",
+    },
+    {
+        "name": "close_loc_value",
+        "sessions_before_start": 2,
+        "title": "(Close − Low)/(High − Low) — close location within bar [0,1]",
+    },
+    {
+        "name": "fred_yield_slope",
+        "sessions_before_start": 1,
+        "title": "Yield curve slope (GS10 − GS2) from FRED — macro rate environment",
+    },
+    {
+        "name": "fred_stress_z",
+        "sessions_before_start": 1,
+        "title": f"STLFSI4 {FEAT_STRESS_Z_WEEKS}-week rolling z-score — financial stress regime",
+    },
+    {
+        "name": "fred_real_yield",
+        "sessions_before_start": 1,
+        "title": "Real yield (TB3MS − CPI YoY) from FRED — inflation-adjusted short rate",
+    },
+    {
+        "name": "fred_marshallian_k",
+        "sessions_before_start": 1,
+        "title": "Marshallian K (ln(M2NS) − ln(GDP)) from FRED — liquidity vs output",
+    },
 ]
 FEATURE_COLS = [s["name"] for s in FEATURE_SPECS]
 assert FEATURE_MAX_SESSIONS == max(s["sessions_before_start"] for s in FEATURE_SPECS)
@@ -618,6 +711,8 @@ _STAGE_SOURCES['feat_near_high'] = '''\
 # Registry name: near_high_{N}
 # Definition: near_high = Close / rolling max(High, N sessions)  (~1 = at peak)
 # Buffer: FEAT_NEAR_HIGH_SESSIONS = 200 trading sessions
+# Adaptive: min_periods=1 so short-history tickers use the max over available
+# sessions (window=200 stays the ceiling; identical to before once ≥200 exist).
 # (Talk to AI by title/name above when changing this feature.)
 # =============================================================================
 def feature_near_high(
@@ -625,8 +720,13 @@ def feature_near_high(
     close: pd.Series,
     window: int = 200,
 ) -> pd.Series:
-    """Close / rolling max High over `window` sessions (incl. today). ~1 = at peak."""
-    peak = high.rolling(window, min_periods=window).max()
+    """Close / rolling max High over up to `window` sessions (incl. today). ~1 = at peak.
+
+    Uses min_periods=1 so a young ticker with < `window` sessions still gets a
+    finite value (peak over whatever history exists). Once ≥ `window` sessions
+    are available the result is identical to a fixed window.
+    """
+    peak = high.rolling(window, min_periods=1).max()
     return close / peak.replace(0.0, np.nan)
 
 
@@ -634,19 +734,22 @@ _NEAR_H = FEAT_NEAR_HIGH_SESSIONS
 _nh_name = f"near_high_{_NEAR_H}"
 bars[_nh_name] = feature_near_high(bars["High"], bars["Close"], _NEAR_H)
 
-# Manual check on FEATURE_VALIDATE_TS
+# Manual check on FEATURE_VALIDATE_TS (adaptive to available history)
 _hi = bars["High"].loc[:FEATURE_VALIDATE_TS].tail(_NEAR_H)
-assert len(_hi) == _NEAR_H, f"insufficient history for {_nh_name}"
+_avail = len(_hi)
+assert _avail >= 1, f"no history for {_nh_name}"
 manual_peak = float(_hi.max())
 manual_close = float(bars.loc[FEATURE_VALIDATE_TS, "Close"])
 manual_nh = manual_close / manual_peak
 pipeline_nh = float(bars.loc[FEATURE_VALIDATE_TS, _nh_name])
-print(f"[{_nh_name}] sessions_before_start={_NEAR_H}")
+print(f"[{_nh_name}] sessions_before_start={_NEAR_H}  (used {_avail}/{_NEAR_H})")
 print(f"  high window: {_hi.index.min().date()} → {_hi.index.max().date()}")
 print(f"  peak High={manual_peak:.6f}  Close={manual_close:.6f}")
 print(f"  manual={manual_nh:.10f}  pipeline={pipeline_nh:.10f}  err={abs(manual_nh - pipeline_nh):.3e}")
 assert abs(manual_nh - pipeline_nh) < 1e-10, f"{_nh_name} validation failed"
 assert 0.0 < pipeline_nh <= 1.0 + 1e-6, f"{_nh_name} out of expected (0,1]"
+if _avail < _NEAR_H:
+    print(f"  (short history: {_avail}/{_NEAR_H} sessions — near_high uses available max)")
 print(f"PASS {_nh_name}")
 
 '''
@@ -753,6 +856,419 @@ print(f"  close={_close:.6f}  mid={_mid:.6f}  lower={_lower:.6f}")
 print(f"  manual dist_lower={manual_l:.10f}  pipeline={pipeline_l:.10f}  err={abs(manual_l-pipeline_l):.3e}")
 assert abs(manual_l - pipeline_l) < 1e-10, "bb_dist_lower validation failed"
 print("PASS bb_dist_lower")
+
+'''
+
+_STAGE_SOURCES['feat_trend'] = '''\
+# =============================================================================
+# Feature: med_term_21wk
+# Registry name: med_term_{N}wk
+# Definition: ATR-normalized N-session log return = log(Close_t / Close_{t-N}) / ATR_N
+#             True Range per Wilder (1978); ATR via Wilder EWM smoothing
+# Buffer: FEAT_TREND_SESSIONS+1 = 22 trading sessions
+# (Talk to AI by title/name above when changing this feature.)
+# =============================================================================
+def feature_true_range(high: pd.Series, low: pd.Series, close: pd.Series) -> pd.Series:
+    """Wilder True Range: max(H-L, |H-C_prev|, |L-C_prev|)."""
+    hl = high - low
+    hc = (high - close.shift(1)).abs()
+    lc = (low - close.shift(1)).abs()
+    return pd.concat([hl, hc, lc], axis=1).max(axis=1)
+
+
+def feature_atr(high: pd.Series, low: pd.Series, close: pd.Series, period: int) -> pd.Series:
+    """Wilder ATR via EWM with alpha=1/period."""
+    tr = feature_true_range(high, low, close)
+    return tr.ewm(alpha=1 / period, adjust=False).mean()
+
+
+def feature_trend_intensity(
+    high: pd.Series, low: pd.Series, close: pd.Series, period: int = 21,
+) -> pd.Series:
+    """ATR-normalized N-session log return (medium-horizon momentum).
+
+    log(Close_t / Close_{t-N}) / ATR_N  — how many ATRs has price moved.
+    """
+    atr = feature_atr(high, low, close, period)
+    log_ret = np.log(close / close.shift(period))
+    return log_ret / atr.replace(0.0, np.nan)
+
+
+_trend_name = f"med_term_{FEAT_TREND_SESSIONS}wk"
+bars[_trend_name] = feature_trend_intensity(
+    bars["High"], bars["Low"], bars["Close"], FEAT_TREND_SESSIONS,
+)
+
+# ---- Hand validation ----
+_sub = bars.loc[:FEATURE_VALIDATE_TS, ["High", "Low", "Close"]].copy()
+# manual TR
+_tr_vals = []
+for j in range(len(_sub)):
+    if j == 0:
+        _tr_vals.append(float("nan"))
+        continue
+    h, l, pc = float(_sub["High"].iloc[j]), float(_sub["Low"].iloc[j]), float(_sub["Close"].iloc[j - 1])
+    _tr_vals.append(max(h - l, abs(h - pc), abs(l - pc)))
+_tr = pd.Series(_tr_vals, index=_sub.index)
+# manual ATR via recursive Wilder EWM (alpha=1/period)
+_period = FEAT_TREND_SESSIONS
+_atr_vals = [float("nan")] * len(_sub)
+_seed = _tr.iloc[1:_period + 1].mean()
+_atr_vals[_period] = float(_seed)
+for j in range(_period + 1, len(_sub)):
+    _prev = _atr_vals[j - 1]
+    _atr_vals[j] = (_prev * (_period - 1) + _tr.iloc[j]) / _period
+_atr_manual = pd.Series(_atr_vals, index=_sub.index)
+# manual log return
+_c = _sub["Close"]
+_log_ret_manual = np.log(float(_c.iloc[-1]) / float(_c.iloc[-1 - _period]))
+_manual = _log_ret_manual / float(_atr_manual.iloc[-1])
+_pipeline = float(bars.loc[FEATURE_VALIDATE_TS, _trend_name])
+
+print(f"[{_trend_name}] sessions_before_start={FEAT_TREND_SESSIONS + 1}")
+print(f"  period={FEAT_TREND_SESSIONS}")
+print(f"  ATR manual={float(_atr_manual.iloc[-1]):.10f}")
+print(f"  log_ret manual={_log_ret_manual:.10f}")
+print(f"  manual={_manual:.10f}  pipeline={_pipeline:.10f}  err={abs(_manual - _pipeline):.3e}")
+assert abs(_manual - _pipeline) < 1e-6, f"{_trend_name} validation failed"
+print(f"PASS {_trend_name}")
+
+'''
+
+_STAGE_SOURCES['feat_adx'] = '''\
+# =============================================================================
+# Feature: adx_14 + di_spread
+# Registry name: adx_14, di_spread
+# Definition: Wilder ADX(14) trend strength + (+DI − −DI) directional spread
+#             +DM = max(UpMove, 0) if UpMove > DownMove and UpMove > 0
+#             −DM = max(DownMove, 0) if DownMove > UpMove and DownMove > 0
+#             DI = 100 * smoothed_DM / ATR; ADX = smoothed |+DI − −DI| / (+DI + −DI) * 100
+# Buffer: FEAT_ADX_SESSIONS * 2 = 28 trading sessions (Wilder smoothing warm-up)
+# (Talk to AI by title/name above when changing this feature.)
+# =============================================================================
+def feature_adx_di(
+    high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14,
+) -> tuple[pd.Series, pd.Series, pd.Series]:
+    """Wilder ADX, +DI, −DI via EWM smoothing (alpha=1/period).
+
+    Returns (adx, plus_di, minus_di).
+    """
+    up = high.diff()
+    down = -low.diff()
+    plus_dm = up.where((up > down) & (up > 0), 0.0)
+    minus_dm = down.where((down > up) & (down > 0), 0.0)
+
+    # Wilder ATR (reuse feature_atr if available, else compute inline)
+    if "feature_atr" in dir():
+        atr = feature_atr(high, low, close, period)
+    else:
+        tr = pd.concat([
+            high - low,
+            (high - close.shift(1)).abs(),
+            (low - close.shift(1)).abs(),
+        ], axis=1).max(axis=1)
+        atr = tr.ewm(alpha=1 / period, adjust=False, min_periods=period).mean()
+
+    atr_safe = atr.replace(0.0, np.nan)
+    plus_di = 100.0 * plus_dm.ewm(alpha=1 / period, adjust=False, min_periods=period).mean() / atr_safe
+    minus_di = 100.0 * minus_dm.ewm(alpha=1 / period, adjust=False, min_periods=period).mean() / atr_safe
+    di_sum = (plus_di + minus_di).replace(0.0, np.nan)
+    dx = 100.0 * (plus_di - minus_di).abs() / di_sum
+    adx = dx.ewm(alpha=1 / period, adjust=False, min_periods=period).mean()
+    return adx, plus_di, minus_di
+
+
+_adx, _pdi, _mdi = feature_adx_di(
+    bars["High"], bars["Low"], bars["Close"], FEAT_ADX_SESSIONS,
+)
+bars["adx_14"] = _adx
+bars["di_spread"] = _pdi - _mdi
+
+# ---- Hand validation ----
+_sub = bars.loc[:FEATURE_VALIDATE_TS, ["High", "Low", "Close"]].copy()
+_p = FEAT_ADX_SESSIONS
+_h, _l, _c = _sub["High"], _sub["Low"], _sub["Close"]
+_up = _h.diff()
+_down = -_l.diff()
+_plus_dm = _up.where((_up > _down) & (_up > 0), 0.0)
+_minus_dm = _down.where((_down > _up) & (_down > 0), 0.0)
+_tr = pd.concat([_h - _l, (_h - _c.shift(1)).abs(), (_l - _c.shift(1)).abs()], axis=1).max(axis=1)
+_atr_manual = _tr.ewm(alpha=1 / _p, adjust=False, min_periods=_p).mean()
+_smooth_plus = _plus_dm.ewm(alpha=1 / _p, adjust=False, min_periods=_p).mean()
+_smooth_minus = _minus_dm.ewm(alpha=1 / _p, adjust=False, min_periods=_p).mean()
+_atr_safe = _atr_manual.replace(0.0, np.nan)
+_pdi_m = 100.0 * _smooth_plus / _atr_safe
+_mdi_m = 100.0 * _smooth_minus / _atr_safe
+_di_sum = (_pdi_m + _mdi_m).replace(0.0, np.nan)
+_dx = 100.0 * (_pdi_m - _mdi_m).abs() / _di_sum
+_adx_m = _dx.ewm(alpha=1 / _p, adjust=False, min_periods=_p).mean()
+
+_manual_adx = float(_adx_m.iloc[-1])
+_pipeline_adx = float(bars.loc[FEATURE_VALIDATE_TS, "adx_14"])
+_manual_di = float((_pdi_m - _mdi_m).iloc[-1])
+_pipeline_di = float(bars.loc[FEATURE_VALIDATE_TS, "di_spread"])
+
+print(f"[adx_14] sessions_before_start={FEAT_ADX_SESSIONS * 2}")
+print(f"  manual={_manual_adx:.10f}  pipeline={_pipeline_adx:.10f}  err={abs(_manual_adx - _pipeline_adx):.3e}")
+assert abs(_manual_adx - _pipeline_adx) < 1e-6, "adx_14 validation failed"
+print(f"PASS adx_14")
+print(f"[di_spread] manual={_manual_di:.10f}  pipeline={_pipeline_di:.10f}  err={abs(_manual_di - _pipeline_di):.3e}")
+assert abs(_manual_di - _pipeline_di) < 1e-6, "di_spread validation failed"
+print(f"PASS di_spread")
+
+'''
+
+_STAGE_SOURCES['feat_candle'] = '''\
+# =============================================================================
+# Feature: body_ratio_ema3 + wick_asymmetry + smoothed wick variants
+# Registry name: body_ratio_ema3, wick_asymmetry, wick_asym_ema3, wick_asym_ema5, wick_asym_roll5, close_loc_value
+# Definition: body_ratio = |Close−Open| / (High−Low); EMA(3) smoothing
+#             wick_asymmetry = (lower_wick − upper_wick) / range
+#             wick_asym_ema3 = EMA(3) of wick_asymmetry
+#             wick_asym_ema5 = EMA(5) of wick_asymmetry
+#             wick_asym_roll5 = rolling mean(5) of wick_asymmetry
+#             close_loc_value = (Close − Low) / (High − Low), [0,1]
+#             lower_wick = min(Open, Close) − Low
+#             upper_wick = High − max(Open, Close)
+# Buffer: FEAT_BODY_EMA+1 = 4 (body_ratio_ema3); 2 (wick_asymmetry);
+#         FEAT_WICK_EMA3+1 = 4 (wick_asym_ema3); FEAT_WICK_EMA5+1 = 6 (wick_asym_ema5);
+#         FEAT_WICK_ROLL = 5 (wick_asym_roll5); 2 (close_loc_value)
+# (Talk to AI by title/name above when changing this feature.)
+# =============================================================================
+def feature_body_ratio(open_: pd.Series, high: pd.Series, low: pd.Series, close: pd.Series) -> pd.Series:
+    """|body| / range where body = |Close−Open|, range = High−Low."""
+    body = (close - open_).abs()
+    rng = (high - low).replace(0.0, np.nan)
+    return body / rng
+
+
+def feature_body_ratio_ema(
+    open_: pd.Series, high: pd.Series, low: pd.Series, close: pd.Series, ema_span: int = 3,
+) -> pd.Series:
+    """EMA(ema_span) of body_ratio — smoothed candle conviction."""
+    br = feature_body_ratio(open_, high, low, close)
+    return br.ewm(span=ema_span, adjust=False, min_periods=ema_span).mean()
+
+
+def feature_wick_asymmetry(open_: pd.Series, high: pd.Series, low: pd.Series, close: pd.Series) -> pd.Series:
+    """(lower_wick − upper_wick) / range.
+
+    Positive → lower wick dominant (buy-side rejection).
+    Negative → upper wick dominant (sell-side rejection).
+    """
+    lower = pd.concat([open_, close], axis=1).min(axis=1) - low
+    upper = high - pd.concat([open_, close], axis=1).max(axis=1)
+    rng = (high - low).replace(0.0, np.nan)
+    return (lower - upper) / rng
+
+
+def feature_close_loc_value(high: pd.Series, low: pd.Series, close: pd.Series) -> pd.Series:
+    """(Close − Low) / (High − Low) — where close sits within the bar, [0,1]."""
+    rng = (high - low).replace(0.0, np.nan)
+    return (close - low) / rng
+
+
+bars["body_ratio_ema3"] = feature_body_ratio_ema(
+    bars["Open"], bars["High"], bars["Low"], bars["Close"], FEAT_BODY_EMA,
+)
+_wick_raw = feature_wick_asymmetry(
+    bars["Open"], bars["High"], bars["Low"], bars["Close"],
+)
+bars["wick_asymmetry"] = _wick_raw
+bars["wick_asym_ema3"] = _wick_raw.ewm(span=FEAT_WICK_EMA3, adjust=False, min_periods=FEAT_WICK_EMA3).mean()
+bars["wick_asym_ema5"] = _wick_raw.ewm(span=FEAT_WICK_EMA5, adjust=False, min_periods=FEAT_WICK_EMA5).mean()
+bars["wick_asym_roll5"] = _wick_raw.rolling(FEAT_WICK_ROLL, min_periods=FEAT_WICK_ROLL).mean()
+bars["close_loc_value"] = feature_close_loc_value(bars["High"], bars["Low"], bars["Close"])
+
+# ---- Hand validation ----
+_sub = bars.loc[:FEATURE_VALIDATE_TS, ["Open", "High", "Low", "Close"]].copy()
+_o, _h, _l, _c = _sub["Open"], _sub["High"], _sub["Low"], _sub["Close"]
+# manual body_ratio on last session
+_body = abs(float(_c.iloc[-1]) - float(_o.iloc[-1]))
+_rng = float(_h.iloc[-1]) - float(_l.iloc[-1])
+_br_last = _body / _rng if _rng > 0 else float("nan")
+# manual EMA(3) on last 4 sessions
+_br_series = ((_c - _o).abs() / (_h - _l).replace(0.0, np.nan))
+_ema_vals = []
+_alpha = 2.0 / (FEAT_BODY_EMA + 1)
+for j in range(len(_br_series)):
+    v = float(_br_series.iloc[j])
+    if not np.isfinite(v):
+        _ema_vals.append(float("nan"))
+        continue
+    if j == 0 or not np.isfinite(_ema_vals[-1]):
+        _ema_vals.append(v)
+    else:
+        _ema_vals.append(_alpha * v + (1 - _alpha) * _ema_vals[-1])
+_manual_body = _ema_vals[-1]
+_pipeline_body = float(bars.loc[FEATURE_VALIDATE_TS, "body_ratio_ema3"])
+print(f"[body_ratio_ema3] sessions_before_start={FEAT_BODY_EMA + 1}")
+print(f"  manual={_manual_body:.10f}  pipeline={_pipeline_body:.10f}  err={abs(_manual_body - _pipeline_body):.3e}")
+assert abs(_manual_body - _pipeline_body) < 1e-6, "body_ratio_ema3 validation failed"
+print(f"PASS body_ratio_ema3")
+
+# manual wick_asymmetry on last session
+_lower = min(float(_o.iloc[-1]), float(_c.iloc[-1])) - float(_l.iloc[-1])
+_upper = float(_h.iloc[-1]) - max(float(_o.iloc[-1]), float(_c.iloc[-1]))
+_manual_wick = (_lower - _upper) / _rng if _rng > 0 else float("nan")
+_pipeline_wick = float(bars.loc[FEATURE_VALIDATE_TS, "wick_asymmetry"])
+print(f"[wick_asymmetry] sessions_before_start=2")
+print(f"  manual={_manual_wick:.10f}  pipeline={_pipeline_wick:.10f}  err={abs(_manual_wick - _pipeline_wick):.3e}")
+assert abs(_manual_wick - _pipeline_wick) < 1e-10, "wick_asymmetry validation failed"
+print(f"PASS wick_asymmetry")
+
+# manual close_loc_value on last session
+_manual_clv = (float(_c.iloc[-1]) - float(_l.iloc[-1])) / _rng if _rng > 0 else float("nan")
+_pipeline_clv = float(bars.loc[FEATURE_VALIDATE_TS, "close_loc_value"])
+print(f"[close_loc_value] sessions_before_start=2")
+print(f"  manual={_manual_clv:.10f}  pipeline={_pipeline_clv:.10f}  err={abs(_manual_clv - _pipeline_clv):.3e}")
+assert abs(_manual_clv - _pipeline_clv) < 1e-10, "close_loc_value validation failed"
+print(f"PASS close_loc_value")
+
+# manual wick_asym_ema3 on last session
+_wick_series = ((_c - _o).apply(lambda a: 0.0) +  # placeholder
+    pd.concat([_o, _c], axis=1).min(axis=1).sub(_l).sub(
+        _h.sub(pd.concat([_o, _c], axis=1).max(axis=1))
+    ) / (_h - _l).replace(0.0, np.nan))
+_wick_ema_vals = []
+_alpha_w3 = 2.0 / (FEAT_WICK_EMA3 + 1)
+for j in range(len(_wick_series)):
+    v = float(_wick_series.iloc[j])
+    if not np.isfinite(v):
+        _wick_ema_vals.append(float("nan"))
+        continue
+    if j == 0 or not np.isfinite(_wick_ema_vals[-1]):
+        _wick_ema_vals.append(v)
+    else:
+        _wick_ema_vals.append(_alpha_w3 * v + (1 - _alpha_w3) * _wick_ema_vals[-1])
+_manual_wick_ema3 = _wick_ema_vals[-1]
+_pipeline_wick_ema3 = float(bars.loc[FEATURE_VALIDATE_TS, "wick_asym_ema3"])
+print(f"[wick_asym_ema3] sessions_before_start={FEAT_WICK_EMA3 + 1}")
+print(f"  manual={_manual_wick_ema3:.10f}  pipeline={_pipeline_wick_ema3:.10f}  err={abs(_manual_wick_ema3 - _pipeline_wick_ema3):.3e}")
+assert abs(_manual_wick_ema3 - _pipeline_wick_ema3) < 1e-6, "wick_asym_ema3 validation failed"
+print(f"PASS wick_asym_ema3")
+
+'''
+
+_STAGE_SOURCES['feat_fred'] = '''\
+# =============================================================================
+# Feature: fred_yield_slope, fred_stress_z, fred_real_yield, fred_marshallian_k
+# Registry name: fred_yield_slope, fred_stress_z, fred_real_yield, fred_marshallian_k
+# Definition: Macro features from FRED (St. Louis Fed), forward-filled to trading sessions.
+#   fred_yield_slope  = GS10 − GS2 (yield curve slope)
+#   fred_stress_z     = STLFSI4 rolling z-score (52-week window)
+#   fred_real_yield   = TB3MS − CPI_YoY (3-month T-bill − CPI % change YoY)
+#   fred_marshallian_k = ln(M2NS) − ln(GDP) (money supply vs output)
+# Buffer: 1 trading session (FRED data is forward-filled to daily; stress_z needs
+#         52 weeks of weekly STLFSI4 history but that is pre-fetched, not from
+#         trading sessions — so sessions_before_start=1 for alignment).
+# (Talk to AI by title/name above when changing this feature.)
+# =============================================================================
+def load_fred_data(series_map: dict, years_back: int = 12) -> pd.DataFrame:
+    """Fetch FRED series via pandas_datareader and return raw DataFrame.
+
+    series_map: {col_name: fred_series_id}
+    years_back: how many years of history to fetch (need ≥52 weeks for stress_z)
+    """
+    import pandas_datareader.data as web
+    _end = datetime.now()
+    _start = _end - pd.DateOffset(years=years_back)
+    raw = web.DataReader(list(series_map.keys()), "fred", _start, _end)
+    if isinstance(raw.columns, pd.MultiIndex):
+        raw.columns = raw.columns.get_level_values(0)
+    return raw
+
+
+def compute_fred_features(raw: pd.DataFrame, stress_z_weeks: int = 52) -> pd.DataFrame:
+    """Compute the 4 FRED macro features from raw FRED data.
+
+    Each feature is computed on its NATIVE frequency index (weekly for STLFSI4/WM2NS,
+    monthly for GS10/GS2/TB3MS/CPIAUCSL, quarterly for GDP), then reindexed back to
+    the full mixed-frequency index and forward-filled. This prevents the mixed index
+    from corrupting rolling window calculations.
+
+    Returns a DataFrame indexed by FRED release dates with columns:
+    fred_yield_slope, fred_stress_z, fred_real_yield, fred_marshallian_k
+    """
+    fred = pd.DataFrame(index=raw.index)
+
+    # 1) Yield curve slope: GS10 − GS2 (monthly, same index)
+    if "GS10" in raw.columns and "GS2" in raw.columns:
+        gs10 = raw["GS10"].dropna()
+        gs2 = raw["GS2"].dropna()
+        common = gs10.index.intersection(gs2.index)
+        slope = (gs10.loc[common] - gs2.loc[common])
+        fred["fred_yield_slope"] = slope.reindex(raw.index).ffill()
+
+    # 2) Stress momentum: STLFSI4 rolling z-score (weekly native index)
+    if "STLFSI4" in raw.columns:
+        s = raw["STLFSI4"].dropna()  # weekly-only index
+        mu = s.rolling(stress_z_weeks, min_periods=stress_z_weeks).mean()
+        sd = s.rolling(stress_z_weeks, min_periods=stress_z_weeks).std().replace(0.0, np.nan)
+        stress_z = (s - mu) / sd
+        fred["fred_stress_z"] = stress_z.reindex(raw.index).ffill()
+
+    # 3) Real yield: TB3MS − CPI_YoY (monthly native index)
+    if "TB3MS" in raw.columns and "CPIAUCSL" in raw.columns:
+        tb3ms = raw["TB3MS"].dropna()
+        cpi = raw["CPIAUCSL"].dropna()
+        common = tb3ms.index.intersection(cpi.index)
+        cpi_yoy = cpi.loc[common].pct_change(periods=12) * 100.0
+        real_yield = tb3ms.loc[common] - cpi_yoy
+        fred["fred_real_yield"] = real_yield.reindex(raw.index).ffill()
+
+    # 4) Marshallian K: ln(M2NS) − ln(GDP) (mixed weekly/quarterly)
+    if "WM2NS" in raw.columns and "GDP" in raw.columns:
+        m2 = raw["WM2NS"].dropna()
+        gdp = raw["GDP"].dropna()
+        # Forward-fill GDP to M2's weekly index, then compute
+        gdp_ff = gdp.reindex(m2.index, method="ffill")
+        marshallian = np.log(m2) - np.log(gdp_ff)
+        fred["fred_marshallian_k"] = marshallian.reindex(raw.index).ffill()
+
+    return fred
+
+
+def align_fred_to_bars(fred: pd.DataFrame, bars_index: pd.DatetimeIndex) -> pd.DataFrame:
+    """Align FRED features to trading session dates via reindex + forward-fill.
+
+    Each trading session gets the most recent known FRED value as of that date
+    (no look-ahead: FRED release date must be ≤ trading session date).
+    """
+    # Reindex to trading sessions, taking last known value ≤ session date
+    aligned = fred.reindex(bars_index, method="ffill")
+    return aligned
+
+
+_fred_raw = load_fred_data(FRED_SERIES, FRED_FETCH_YEARS_BACK)
+_fred_features = compute_fred_features(_fred_raw, FEAT_STRESS_Z_WEEKS)
+_fred_aligned = align_fred_to_bars(_fred_features, bars.index)
+
+# Merge FRED features into bars
+for _col in ["fred_yield_slope", "fred_stress_z", "fred_real_yield", "fred_marshallian_k"]:
+    if _col in _fred_aligned.columns:
+        bars[_col] = _fred_aligned[_col]
+    else:
+        bars[_col] = np.nan
+
+print(f"[FRED] fetched {len(_fred_raw)} rows from FRED, aligned to {len(bars)} trading sessions")
+print(f"  FRED date range: {_fred_raw.index.min().date()} → {_fred_raw.index.max().date()}")
+print(f"  FRED columns: {_fred_features.columns.tolist()}")
+
+# ---- Hand validation ----
+_fred_vals = {}
+for _col in ["fred_yield_slope", "fred_stress_z", "fred_real_yield", "fred_marshallian_k"]:
+    _fred_vals[_col] = float(bars.loc[FEATURE_VALIDATE_TS, _col])
+    print(f"[{_col}] value@{FEATURE_VALIDATE_TS.date()} = {_fred_vals[_col]:.6f}")
+    assert np.isfinite(_fred_vals[_col]), f"{_col} is NaN on validate date — FRED fetch/align issue"
+
+# Validate yield slope = GS10 − GS2
+_gs10 = float(_fred_raw["GS10"].dropna().loc[:FEATURE_VALIDATE_TS].iloc[-1])
+_gs2 = float(_fred_raw["GS2"].dropna().loc[:FEATURE_VALIDATE_TS].iloc[-1])
+_manual_slope = _gs10 - _gs2
+print(f"  yield_slope check: GS10={_gs10:.4f} GS2={_gs2:.4f} manual={_manual_slope:.6f} pipeline={_fred_vals['fred_yield_slope']:.6f}")
+assert abs(_manual_slope - _fred_vals["fred_yield_slope"]) < 0.01, "fred_yield_slope validation failed"
+print("PASS fred_yield_slope, fred_stress_z, fred_real_yield, fred_marshallian_k")
 
 '''
 
@@ -1181,9 +1697,11 @@ def plot_00_candles_feature_health() -> Path:
     _px = _src.loc[_src.index >= START_TS].dropna(subset=["Open", "High", "Low", "Close"]).copy()
     xnum = mdates.date2num(_px.index.to_pydatetime())
     w = float(np.median(np.diff(xnum))) * 0.65 if len(xnum) > 1 else 0.6
-    for xi, (_, r) in zip(xnum, _px.iterrows()):
+    _prior_close = _px["Close"].shift(1).to_numpy()
+    for i, (xi, (_, r)) in enumerate(zip(xnum, _px.iterrows())):
         o, h, l, c = float(r.Open), float(r.High), float(r.Low), float(r.Close)
-        color = ND_NAVY if c >= o else ND_RED
+        pc = _prior_close[i]
+        color = ND_NAVY if (c >= pc if pd.notna(pc) else c >= o) else ND_RED
         ax_px.vlines(xi, l, h, color=color, linewidth=0.65, zorder=2)
         body_lo, body_hi = (o, c) if c >= o else (c, o)
         height = max(body_hi - body_lo, (h - l) * 0.002 + 1e-6)
@@ -1314,6 +1832,84 @@ FEATURE_ZONES = {
         buy_label="deep off high",
         ob_label="near high",
     ),
+    f"med_term_{FEAT_TREND_SESSIONS}wk": dict(
+        buy_level=-1.0, buy_side="below",  # pulled back ≥1 ATR → light-blue shade below
+        ob_level=2.0, ob_side="above",     # extended ≥+2 ATR → gold shade above
+        buy_label="≥1 ATR pullback",
+        ob_label="≥2 ATR extension",
+    ),
+    "adx_14": dict(
+        buy_level=20.0, buy_side="below",  # weak/no trend → light-blue (range-bound buy zone)
+        ob_level=40.0, ob_side="above",    # strong trend → gold (extension/trend-exhaustion zone)
+        buy_label="weak trend",
+        ob_label="strong trend",
+    ),
+    "di_spread": dict(
+        buy_level=-15.0, buy_side="below",  # bearish pressure dominant
+        ob_level=15.0, ob_side="above",     # bullish pressure dominant
+        buy_label="bearish DI",
+        ob_label="bullish DI",
+    ),
+    "body_ratio_ema3": dict(
+        buy_level=0.2, buy_side="below",   # low conviction / doji-like
+        ob_level=0.6, ob_side="above",     # high conviction candles
+        buy_label="low conviction",
+        ob_label="high conviction",
+    ),
+    "wick_asymmetry": dict(
+        buy_level=0.3, buy_side="above",   # lower-wick dominant (buy-side rejection)
+        ob_level=-0.3, ob_side="below",    # upper-wick dominant (sell-side rejection)
+        buy_label="lower wick rejection",
+        ob_label="upper wick rejection",
+    ),
+    "wick_asym_ema3": dict(
+        buy_level=0.15, buy_side="above",
+        ob_level=-0.15, ob_side="below",
+        buy_label="smoothed lower wick",
+        ob_label="smoothed upper wick",
+    ),
+    "wick_asym_ema5": dict(
+        buy_level=0.10, buy_side="above",
+        ob_level=-0.10, ob_side="below",
+        buy_label="smoothed lower wick",
+        ob_label="smoothed upper wick",
+    ),
+    "wick_asym_roll5": dict(
+        buy_level=0.15, buy_side="above",
+        ob_level=-0.15, ob_side="below",
+        buy_label="sustained lower wick",
+        ob_label="sustained upper wick",
+    ),
+    "close_loc_value": dict(
+        buy_level=0.25, buy_side="below",   # closed in lower 25% of bar → weak
+        ob_level=0.75, ob_side="above",      # closed in upper 75% → strong
+        buy_label="closed low",
+        ob_label="closed high",
+    ),
+    "fred_yield_slope": dict(
+        buy_level=0.0, buy_side="below",   # inverted yield curve → risk-off
+        ob_level=1.0, ob_side="above",     # steep curve → risk-on
+        buy_label="inverted/flat",
+        ob_label="steep",
+    ),
+    "fred_stress_z": dict(
+        buy_level=1.0, buy_side="above",   # high stress → buy (mean-reversion / de-grossing event)
+        ob_level=-1.0, ob_side="below",    # low stress → extension zone
+        buy_label="high stress",
+        ob_label="low stress",
+    ),
+    "fred_real_yield": dict(
+        buy_level=0.0, buy_side="below",   # negative real yield → inflationary, risk-on
+        ob_level=2.0, ob_side="above",     # high real yield → restrictive
+        buy_label="negative real yield",
+        ob_label="restrictive real yield",
+    ),
+    "fred_marshallian_k": dict(
+        buy_level=0.0, buy_side="above",   # high liquidity → risk-on
+        ob_level=-0.5, ob_side="below",    # low liquidity → restrictive
+        buy_label="high liquidity",
+        ob_label="low liquidity",
+    ),
 }
 _BUY_FILL, _OB_FILL = ND_LIGHT_BLUE, ND_GOLD_PALE
 _BUY_LINE, _OB_LINE = ND_NAVY, ND_GOLD
@@ -1419,9 +2015,11 @@ def plot_01_features_outcome_bb() -> Path:
     else:
         w = 0.6
 
-    for xi, (_, r) in zip(xnum, show.iterrows()):
+    _prior_close = show["Close"].shift(1).to_numpy()
+    for i, (xi, (_, r)) in enumerate(zip(xnum, show.iterrows())):
         o, h, l, c = float(r.Open), float(r.High), float(r.Low), float(r.Close)
-        up = c >= o
+        pc = _prior_close[i]
+        up = bool(c >= pc) if pd.notna(pc) else bool(c >= o)
         color = ND_NAVY if up else ND_RED
         ax_px.vlines(xi, l, h, color=color, linewidth=0.7, zorder=2)
         body_lo, body_hi = (o, c) if c >= o else (c, o)
@@ -1941,6 +2539,7 @@ for thr in thresholds:
         if TOTAL_UP_SIMPLE_GAIN > 0 else np.nan
     )
     captured_gain = net_captured  # legacy name in scan row
+    er_per_buy = (net_captured / n_buys) if n_buys else np.nan  # E[r|buy] = net Σr / n_buys
     f1 = (
         (2 * precision * recall / (precision + recall))
         if (n_buys and n_pos and np.isfinite(precision) and np.isfinite(recall) and (precision + recall) > 0)
@@ -1961,6 +2560,7 @@ for thr in thresholds:
         "tp_gain_sum": tp_gain,
         "fp_loss_sum": fp_loss,
         "net_gain_sum": net_captured,
+        "er_per_buy": er_per_buy,
         "f1": f1,
         "beats_coin_50": beats_coin,
         "beats_base_up": beats_base,
@@ -1999,77 +2599,59 @@ else:
     print(f"\\nNOT DISCRIMINATING: no thr with n≥{MIN_TRADES} and precision > {pass_floor:.0%}")
     print(f"  peak buy-in anywhere: {max_buy_precision:.1%}" if np.isfinite(max_buy_precision) else "")
 
-# Composite recommend: pctile(buy-in %) + pctile(% gain captured) → take max
+# Composite recommend: pctile(buy-in %) + pctile(E[r|buy]) → take max
+# E[r|buy] = net Σr on buys / n_buys  (expected return per trade at this threshold)
 # Percentile ranks over thr with n≥1 and finite metrics; pick among n≥MIN_TRADES when possible.
 _comp = xgb_scan[
     (xgb_scan["n_buys"] >= 1)
     & xgb_scan["precision"].notna()
-    & xgb_scan["gain_captured"].notna()
+    & xgb_scan["er_per_buy"].notna()
 ].copy()
 _comp["pct_prec"] = _comp["precision"].rank(method="average", pct=True)
-_comp["pct_gain"] = _comp["gain_captured"].rank(method="average", pct=True)
+_comp["pct_er"] = _comp["er_per_buy"].rank(method="average", pct=True)
 _w_prec = float(globals().get("BUY_ENTRY_COMPOSITE_W_PREC", 2.0))
-_w_gain = float(globals().get("BUY_ENTRY_COMPOSITE_W_GAIN", 1.0))
-_comp["composite"] = _w_prec * _comp["pct_prec"] + _w_gain * _comp["pct_gain"]
+_w_er = float(globals().get("BUY_ENTRY_COMPOSITE_W_GAIN", 1.0))
+_comp["composite"] = _w_prec * _comp["pct_prec"] + _w_er * _comp["pct_er"]
 _comp["w_prec"] = _w_prec
-_comp["w_gain"] = _w_gain
+_comp["w_er"] = _w_er
 # merge ranks back onto full scan for CSV / chart
 xgb_scan = xgb_scan.merge(
-    _comp[["entry_score_min", "pct_prec", "pct_gain", "composite"]],
+    _comp[["entry_score_min", "pct_prec", "pct_er", "composite"]],
     on="entry_score_min",
     how="left",
 )
 xgb_scan.to_csv(OUTPUT_DIR / f"entry_threshold_scan_{TICKER}.csv", index=False)
 
-if len(_comp) == 0:
-    thr_composite = float("nan")
-    _comp_row = pd.Series({
-        "entry_score_min": float("nan"),
-        "composite": float("nan"),
-        "pct_prec": float("nan"),
-        "pct_gain": float("nan"),
-        "n_buys": 0,
-        "n_wins": 0,
-        "precision": float("nan"),
-        "gain_captured": float("nan"),
-    })
-    print("\\nComposite thr: N/A (no threshold with n≥1 & finite precision/gain)")
-else:
-    _pool = _comp[_comp["n_buys"] >= MIN_TRADES].copy() if (_comp["n_buys"] >= MIN_TRADES).any() else _comp
-    _comp_row = _pool.sort_values(
-        ["composite", "precision", "n_wins", "n_buys"], ascending=False
-    ).iloc[0]
-    thr_composite = float(_comp_row["entry_score_min"])
-    print(
-        f"\\nComposite thr (weighted: W_prec*buy-in + W_gain*gain-cap): score ≥ {thr_composite:.0%}"
-        f"  composite={float(_comp_row['composite']):.3f}"
-        f"  (W={_w_prec:g}/{_w_gain:g}  pct_prec={float(_comp_row['pct_prec']):.2f}  pct_gain={float(_comp_row['pct_gain']):.2f})"
-        f"  buy-in={float(_comp_row['precision']):.1%}  n={int(_comp_row['n_buys'])}"
-        f"  gain_cap={float(_comp_row['gain_captured']):+.1%}"
-    )
+_pool = _comp[_comp["n_buys"] >= MIN_TRADES].copy() if (_comp["n_buys"] >= MIN_TRADES).any() else _comp
+_comp_row = _pool.sort_values(
+    ["composite", "precision", "n_wins", "n_buys"], ascending=False
+).iloc[0]
+thr_composite = float(_comp_row["entry_score_min"])
+print(
+    f"\\nComposite thr (weighted: W_prec*buy-in + W_er*E[r|buy]): score ≥ {thr_composite:.0%}"
+    f"  composite={float(_comp_row['composite']):.3f}"
+    f"  (W={_w_prec:g}/{_w_er:g}  pct_prec={float(_comp_row['pct_prec']):.2f}  pct_er={float(_comp_row['pct_er']):.2f})"
+    f"  buy-in={float(_comp_row['precision']):.1%}  n={int(_comp_row['n_buys'])}"
+    f"  E[r|buy]={float(_comp_row['er_per_buy']):+.2%}"
+)
 
 _mode = str(globals().get("BUY_ENTRY_THR_MODE", "manual")).lower().strip()
-if _mode == "composite" and np.isfinite(thr_composite):
+if _mode == "composite":
     ENTRY_OPERATING = thr_composite
     BUY_ENTRY_SCORE_MIN = float(ENTRY_OPERATING)
     BUY_XGB_PROB_MIN = float(ENTRY_OPERATING)
     print(f"ENTRY_OPERATING = {ENTRY_OPERATING:.1%}  [mode=composite auto-select]")
 else:
-    # manual pin (or composite N/A): snap to nearest 1% scan step
-    _op = float(BUY_ENTRY_SCORE_MIN) if np.isfinite(float(BUY_ENTRY_SCORE_MIN)) else 0.65
+    # manual pin: snap to nearest 1% scan step
+    _op = float(BUY_ENTRY_SCORE_MIN)
     ENTRY_OPERATING = float(xgb_scan.iloc[(xgb_scan["entry_score_min"] - _op).abs().argmin()]["entry_score_min"])
-    _why = "manual pin" if _mode != "composite" else "composite N/A → config pin"
-    print(f"ENTRY_OPERATING = {ENTRY_OPERATING:.1%}  [mode={_why} from config {float(BUY_ENTRY_SCORE_MIN):.1%}]")
+    print(f"ENTRY_OPERATING = {ENTRY_OPERATING:.1%}  [mode=manual pin from config {float(BUY_ENTRY_SCORE_MIN):.1%}]")
 
-_op_rows = xgb_scan.loc[np.isclose(xgb_scan["entry_score_min"], ENTRY_OPERATING)]
-if len(_op_rows):
-    _op_row = _op_rows.iloc[0]
-else:
-    _op_row = xgb_scan.iloc[(xgb_scan["entry_score_min"] - ENTRY_OPERATING).abs().argmin()]
+_op_row = xgb_scan.loc[np.isclose(xgb_scan["entry_score_min"], ENTRY_OPERATING)].iloc[0]
 print(
     f"  → operating metrics: n_buys={int(_op_row['n_buys'])}"
     f"  prec={_op_row['precision']:.1%}  recall={_op_row['recall']:.1%}"
-    f"  gain_cap={float(_op_row['gain_captured']):+.1%}"
+    f"  E[r|buy]={float(_op_row['er_per_buy']):+.2%}"
 )
 
 _live_raw = float(pred_target["xgb_prob_up"]) if "pred_target" in dir() else float("nan")
@@ -2117,12 +2699,13 @@ summary_80 = {
         "entry_score_min": thr_composite,
         "composite": float(_comp_row["composite"]),
         "pct_prec": float(_comp_row["pct_prec"]),
-        "pct_gain": float(_comp_row["pct_gain"]),
+        "pct_er": float(_comp_row["pct_er"]),
         "n_buys": int(_comp_row["n_buys"]),
         "n_wins": int(_comp_row["n_wins"]),
         "precision": float(_comp_row["precision"]),
+        "er_per_buy": float(_comp_row["er_per_buy"]),
         "gain_captured": float(_comp_row["gain_captured"]),
-        "selection": (f"argmax({_w_prec:g}*rank_pct(precision) + {_w_gain:g}*rank_pct(gain_captured)) among thr with n≥min_trades"),
+        "selection": (f"argmax({_w_prec:g}*rank_pct(precision) + {_w_er:g}*rank_pct(E[r|buy])) among thr with n≥min_trades"),
     },
     "best_rule": None if not XGB_IS_DISCRIMINATING else {
         "entry_score_min": float(ENTRY_OPERATING),
@@ -2137,6 +2720,7 @@ summary_80 = {
         "beats_coin_50": bool(_op_row["beats_coin_50"]),
         "beats_base_up": bool(_op_row["beats_base_up"]),
         "meets_target": bool(_op_row.get("eligible", False)),
+        "er_per_buy": float(_op_row["er_per_buy"]),
         "gain_captured": float(_op_row["gain_captured"]),
     },
     "pending": {
@@ -2147,7 +2731,8 @@ summary_80 = {
     },
     "metrics_note": (
         "precision=TP/(TP+FP). Eligible if precision > max(50%, base UP) and n≥min_trades. "
-        "gain_captured = net Σ r on buys / Σ r on all UP days. Scale often ≪100%; chart y2 autoscales."
+        "E[r|buy] = net Σ r on buys / n_buys (expected return per trade). "
+        "gain_captured = net Σ r on buys / Σ r on all UP days (legacy, retained for reference)."
     ),
 }
 (OUTPUT_DIR / f"entry_rule_80_{TICKER}.json").write_text(json.dumps(summary_80, indent=2, default=str))
@@ -2164,7 +2749,10 @@ def plot_02_entry_calibration() -> Path:
     lift_pp = (xgb_scan["precision"].to_numpy(dtype=float) - base_up) * 100.0
     n_oos_neg = int(n_oos - n_pos)  # actual next-DOWN / "no buy" outcomes in OOS pop
     rec = xgb_scan["recall"].to_numpy(dtype=float)  # kept for F1 / legacy
-    gain_pct = xgb_scan["gain_captured"].to_numpy(dtype=float) * 100.0  # % of UP simple-gain captured
+    tp_gain_a = xgb_scan["tp_gain_sum"].to_numpy(dtype=float)  # Σ r on BUY-and-UP days
+    fp_loss_a = xgb_scan["fp_loss_sum"].to_numpy(dtype=float)  # Σ r on BUY-and-DOWN days (≤0)
+    er_per_buy_a = xgb_scan["er_per_buy"].to_numpy(dtype=float)  # E[r|buy] = net / n_buys
+    gain_pct = xgb_scan["gain_captured"].to_numpy(dtype=float) * 100.0  # legacy, retained for reference
     ok = n_buys_a >= 1
     elig_mask = xgb_scan["eligible"].to_numpy(dtype=bool)
     # Notre Dame navy monochrome: darker = higher buy-in accuracy %
@@ -2235,7 +2823,7 @@ def plot_02_entry_calibration() -> Path:
             (
                 f"Threshold: {ENTRY_OPERATING:.0%}\\n"
                 f"Accuracy ({int(_op_row['n_wins'])} / {int(_op_row['n_buys'])}): {float(_op_row['precision']):.0%}\\n"
-                f"Gain Sum: {float(_op_row['gain_captured']):.0%}"
+                f"E[r|buy]: {float(_op_row['er_per_buy']):+.2%}"
             ),
             xy=(ENTRY_OPERATING, _ymax),
             xytext=(8, -6),
@@ -2263,30 +2851,37 @@ def plot_02_entry_calibration() -> Path:
             ),
         )
 
-    # y2: % of ALL available UP-day simple gains captured by BUY set (net of FP losses)
-    # Auto-scale axis — values are often single-digit %; locking 0–100% hid the shape.
+    # y2: un-netted TP gain vs FP loss per threshold (the two components of net edge)
+    # Gold = Σ r on BUY-and-UP days (what you earn from winners)
+    # Red  = Σ r on BUY-and-DOWN days (what you lose from false positives, ≤0)
+    # The gap between them = net edge. Widest gap = optimal threshold.
     ax2 = ax.twinx()
-    _g_ok = gain_pct[ok]
-    ax2.plot(xs[ok], _g_ok, "-", color="#C99700", lw=2.6, zorder=6, label="% of total UP gain captured")
-    ax2.plot(xs[ok], _g_ok, "o", color="#C99700", ms=5.5, markeredgecolor="#0C2340", markeredgewidth=0.6, zorder=7)
-    ax2.axhline(0.0, color="#C99700", lw=0.9, ls=":", alpha=0.85, zorder=5)
+    _tp_ok = tp_gain_a[ok]
+    _fp_ok = fp_loss_a[ok]
+    ax2.plot(xs[ok], _tp_ok, "-", color="#C99700", lw=2.6, zorder=6, label="TP gain Σr (BUY · UP)")
+    ax2.plot(xs[ok], _tp_ok, "o", color="#C99700", ms=5.5, markeredgecolor="#0C2340", markeredgewidth=0.6, zorder=7)
+    ax2.plot(xs[ok], _fp_ok, "-", color="#B91C1C", lw=2.2, zorder=6, label="FP loss Σr (BUY · DOWN)")
+    ax2.plot(xs[ok], _fp_ok, "o", color="#B91C1C", ms=4.5, markeredgecolor="#7F1D1D", markeredgewidth=0.5, zorder=7)
+    ax2.axhline(0.0, color="#6B7280", lw=0.9, ls=":", alpha=0.85, zorder=5)
     ax2.set_ylabel(
-        "% of total UP-day gain captured\\n"
-        "net Σ r_buy / Σ r_all_UP   ·   r = close_next/close − 1",
+        "Σ r on BUY days at this threshold\\n"
+        "gold = Σ r on winners (TP)  ·  red = Σ r on losers (FP)\\n"
+        "gap between lines = net edge  ·  r = close_next/close − 1",
         color="#8B6914",
-        fontsize=10,
+        fontsize=9.5,
     )
-    if np.any(np.isfinite(_g_ok)):
-        g_lo = float(np.nanmin(_g_ok))
-        g_hi = float(np.nanmax(_g_ok))
-        pad = max(1.5, 0.15 * (g_hi - g_lo + 1e-9))
+    _all_y = np.concatenate([_tp_ok[np.isfinite(_tp_ok)], _fp_ok[np.isfinite(_fp_ok)]])
+    if len(_all_y):
+        g_lo = float(np.nanmin(_all_y))
+        g_hi = float(np.nanmax(_all_y))
+        pad = max(0.02, 0.15 * (g_hi - g_lo + 1e-9))
         ax2.set_ylim(g_lo - pad, g_hi + pad)
     else:
-        ax2.set_ylim(-5, 15)
+        ax2.set_ylim(-0.5, 1.0)
     ax2.tick_params(axis="y", labelsize=10, labelcolor="#8B6914")
     ax2.spines["right"].set_color("#C99700")
     ax2.spines["right"].set_linewidth(1.4)
-    # Navy marker (no text boxes) on operating thr — buy-in bar + gain curve
+    # Navy marker (no text boxes) on operating thr — buy-in bar + TP gain curve
     _NAVY_MARK = "#0C2340"
     _op_idx = int(np.argmin(np.abs(xs - ENTRY_OPERATING))) if len(xs) else None
     if _op_idx is not None and ok[_op_idx]:
@@ -2296,7 +2891,7 @@ def plot_02_entry_calibration() -> Path:
             markeredgewidth=1.3, zorder=10, linestyle="None",
         )
         ax2.plot(
-            xs[_op_idx], gain_pct[_op_idx],
+            xs[_op_idx], tp_gain_a[_op_idx],
             marker="o", ms=12, color=_NAVY_MARK, markeredgecolor="#FFFFFF",
             markeredgewidth=1.3, zorder=10, linestyle="None",
         )
@@ -2329,27 +2924,28 @@ def plot_02_entry_calibration() -> Path:
     axn.set_ylim(0, max(float(n_oos) * 1.08, MIN_TRADES + 5))
     axn.set_xlabel("Enter long if oriented entry score ≥ threshold", fontsize=11)
 
-    # Right axis: buy-in accuracy lift over weighted-coin base UP (percentage points)
+    # Right axis: E[r|buy] = expected return per trade at this threshold
     axn2 = axn.twinx()
-    _lift_ok = lift_pp[ok]
-    axn2.plot(xs[ok], _lift_ok, "-", color="#047857", lw=2.2, zorder=6, label="accuracy vs base UP")
+    _er_ok = er_per_buy_a[ok] * 100.0  # convert to % for readability
+    axn2.plot(xs[ok], _er_ok, "-", color="#047857", lw=2.2, zorder=6, label="E[r|buy] per trade")
     axn2.plot(
-        xs[ok], _lift_ok, "o", color="#047857", ms=4.5,
+        xs[ok], _er_ok, "o", color="#047857", ms=4.5,
         markeredgecolor="#ECFDF5", markeredgewidth=0.5, zorder=7,
     )
     axn2.axhline(0.0, color="#047857", lw=1.0, ls="--", alpha=0.75, zorder=5)
     axn2.set_ylabel(
-        f"Buy-in accuracy − base UP ({base_up:.0%})\\npp better than weighted coin",
+        "E[r|buy]  %\\n"
+        "net Σ r on buys / n_buys  ·  expected return per trade",
         color="#065F46",
         fontsize=9.5,
     )
-    if np.any(np.isfinite(_lift_ok)):
-        _l_lo = float(np.nanmin(_lift_ok))
-        _l_hi = float(np.nanmax(_lift_ok))
-        _l_pad = max(2.0, 0.15 * (_l_hi - _l_lo + 1e-9))
+    if np.any(np.isfinite(_er_ok)):
+        _l_lo = float(np.nanmin(_er_ok))
+        _l_hi = float(np.nanmax(_er_ok))
+        _l_pad = max(0.5, 0.15 * (_l_hi - _l_lo + 1e-9))
         axn2.set_ylim(_l_lo - _l_pad, _l_hi + _l_pad)
     else:
-        axn2.set_ylim(-10, 30)
+        axn2.set_ylim(-5, 20)
     axn2.tick_params(axis="y", labelsize=9.5, labelcolor="#065F46")
     axn2.spines["right"].set_color("#047857")
     axn2.spines["right"].set_linewidth(1.3)
@@ -2357,15 +2953,15 @@ def plot_02_entry_calibration() -> Path:
         axn.axvline(ENTRY_OPERATING, color="#C99700", lw=2.0, zorder=5, alpha=0.9)
     if _op_idx is not None and ok[_op_idx]:
         axn2.plot(
-            xs[_op_idx], lift_pp[_op_idx],
+            xs[_op_idx], er_per_buy_a[_op_idx] * 100.0,
             marker="o", ms=11, color=_NAVY_MARK, markeredgecolor="#FFFFFF",
             markeredgewidth=1.2, zorder=10, linestyle="None",
         )
-        # Label operating thr: e.g. +16pp vs base
-        _op_lift = float(lift_pp[_op_idx])
+        # Label operating thr: e.g. +3.3% per trade
+        _op_er = float(er_per_buy_a[_op_idx]) * 100.0
         axn2.annotate(
-            f"{_op_lift:+.0f}pp vs base",
-            xy=(xs[_op_idx], _op_lift),
+            f"{_op_er:+.1f}%/trade",
+            xy=(xs[_op_idx], _op_er),
             xytext=(8, 10), textcoords="offset points",
             color="#065F46", fontsize=8.5, fontweight="bold",
             arrowprops=dict(arrowstyle="-", color="#065F46", lw=0.8),
@@ -2378,8 +2974,8 @@ def plot_02_entry_calibration() -> Path:
     )
     gate_txt = (
         f"DISCRIMINATES  ·  thr mode={_mode}  op≥{ENTRY_OPERATING:.0%}  "
-        f"buy-in {_op_row['precision']:.0%}  gain_cap {_op_row['gain_captured']:+.0%}  "
-        f"(composite weighted buy-in > gain)"
+        f"buy-in {_op_row['precision']:.0%}  E[r|buy]={float(_op_row['er_per_buy']):+.2%}  "
+        f"(composite weighted buy-in > E[r|buy])"
         if XGB_IS_DISCRIMINATING else
         f"NOT DISCRIMINATING  ·  no thr with n≥{MIN_TRADES} clears max(50%, base {base_up:.0%})"
     )
@@ -2398,8 +2994,6 @@ def plot_02_entry_calibration() -> Path:
               label=f"eligible (n≥{MIN_TRADES} & clears floors)"),
         Line2D([0], [0], color="#B91C1C", lw=2, label="50% coin flip"),
         Line2D([0], [0], color="#0369A1", lw=2, ls="--", label=f"weighted coin / base UP ({base_up:.0%})"),
-        Line2D([0], [0], color="#C99700", lw=2.6, marker="o", markersize=6,
-               markeredgecolor="#0C2340", label="% of gain captured (y2)"),
     ]
     if XGB_IS_DISCRIMINATING:
         legend_elems.append(Line2D([0], [0], color="#C99700", lw=2.8, label=f"ENTRY thr {ENTRY_OPERATING:.1%}"))
@@ -2420,14 +3014,8 @@ def plot_02_entry_calibration() -> Path:
     print(json.dumps(summary_80, indent=2, default=str))
     return fig_path
 
-try:
-    _p02 = plot_02_entry_calibration()
-    print("saved", _p02)
-    assert Path(_p02).is_file(), f"02 chart missing after plot: {_p02}"
-except Exception as _e02:
-    raise RuntimeError(
-        f"Failed to write 02_entry_calibration_{TICKER}.png under {OUTPUT_DIR}: {_e02}"
-    ) from _e02
+_p02 = plot_02_entry_calibration()
+print("saved", _p02)
 
 # Publish thr for Step 3b if present
 if XGB_IS_DISCRIMINATING:
@@ -2644,7 +3232,7 @@ def composite_thr_lastn(
 ) -> dict:
     """Same composite thr recipe as 02 / entry calibration, on a fixed window (e.g. last-N).
 
-    composite = W_PREC * rank_pct(precision) + W_GAIN * rank_pct(gain_captured)
+    composite = W_PREC * rank_pct(precision) + W_ER * rank_pct(E[r|buy])
     among thr with n_buys ≥ min_trades (else all thr with n≥1).
     """
     scores = np.asarray(entry_scores, dtype=float)
@@ -2654,7 +3242,7 @@ def composite_thr_lastn(
     simple = np.expm1(r)  # close_next/close − 1
     n = len(scores)
     if n == 0:
-        return {"thr": float("nan"), "precision": float("nan"), "n_buys": 0, "n_wins": 0, "gain_captured": float("nan")}
+        return {"thr": float("nan"), "precision": float("nan"), "n_buys": 0, "n_wins": 0, "er_per_buy": float("nan"), "gain_captured": float("nan")}
     min_tr = int(min_trades if min_trades is not None else globals().get("MIN_TRADES", 10))
     # last-N is short: never demand more trades than exist
     min_tr = max(1, min(min_tr, max(3, n // 3)))
@@ -2667,25 +3255,27 @@ def composite_thr_lastn(
         n_wins = int((m & (y == 1)).sum())
         prec = (n_wins / n_buys) if n_buys else np.nan
         net = float(simple[m].sum()) if n_buys else 0.0
+        er_per_buy = (net / n_buys) if n_buys else np.nan
         gain_cap = (net / total_up) if total_up > 0 else np.nan
         rows.append({
             "entry_score_min": float(thr),
             "n_buys": n_buys,
             "n_wins": n_wins,
             "precision": prec,
+            "er_per_buy": er_per_buy,
             "gain_captured": gain_cap,
         })
     scan = pd.DataFrame(rows)
     comp = scan[
-        (scan["n_buys"] >= 1) & scan["precision"].notna() & scan["gain_captured"].notna()
+        (scan["n_buys"] >= 1) & scan["precision"].notna() & scan["er_per_buy"].notna()
     ].copy()
     if len(comp) == 0:
-        return {"thr": float("nan"), "precision": float("nan"), "n_buys": 0, "n_wins": 0, "gain_captured": float("nan"), "base_up": base_up}
+        return {"thr": float("nan"), "precision": float("nan"), "n_buys": 0, "n_wins": 0, "er_per_buy": float("nan"), "gain_captured": float("nan"), "base_up": base_up}
     w_p = float(globals().get("BUY_ENTRY_COMPOSITE_W_PREC", 2.0))
-    w_g = float(globals().get("BUY_ENTRY_COMPOSITE_W_GAIN", 1.0))
+    w_e = float(globals().get("BUY_ENTRY_COMPOSITE_W_GAIN", 1.0))
     comp["pct_prec"] = comp["precision"].rank(method="average", pct=True)
-    comp["pct_gain"] = comp["gain_captured"].rank(method="average", pct=True)
-    comp["composite"] = w_p * comp["pct_prec"] + w_g * comp["pct_gain"]
+    comp["pct_er"] = comp["er_per_buy"].rank(method="average", pct=True)
+    comp["composite"] = w_p * comp["pct_prec"] + w_e * comp["pct_er"]
     pool = comp[comp["n_buys"] >= min_tr] if (comp["n_buys"] >= min_tr).any() else comp
     row = pool.sort_values(["composite", "precision", "n_wins", "n_buys"], ascending=False).iloc[0]
     return {
@@ -2693,12 +3283,13 @@ def composite_thr_lastn(
         "precision": float(row["precision"]),
         "n_buys": int(row["n_buys"]),
         "n_wins": int(row["n_wins"]),
+        "er_per_buy": float(row["er_per_buy"]),
         "gain_captured": float(row["gain_captured"]),
         "composite": float(row["composite"]),
         "min_trades": min_tr,
         "base_up": base_up,
         "w_prec": w_p,
-        "w_gain": w_g,
+        "w_er": w_e,
     }
 
 
@@ -2913,14 +3504,14 @@ def plot_03_dir_hits_lastn() -> Path:
         )
         print(
             "03 last-%d composite thr=%.1f%%  (operating thr=%.1f%%)  "
-            "buy-in=%.1f%% n=%d  gain_cap=%+.1f%%"
+            "buy-in=%.1f%% n=%d  E[r|buy]=%+.2f%%"
             % (
                 n_hist,
                 100.0 * _ln_thr,
                 100.0 * float(ENTRY_THR),
                 100.0 * float(_ln_opt["precision"]),
                 int(_ln_opt["n_buys"]),
-                100.0 * float(_ln_opt["gain_captured"]),
+                100.0 * float(_ln_opt["er_per_buy"]),
             )
         )
     else:
@@ -3132,6 +3723,10 @@ _STAGE_ORDER = [
     "feat_near_high",
     "feat_obv",
     "feat_bb",
+    "feat_trend",
+    "feat_adx",
+    "feat_candle",
+    "feat_fred",
     "assemble",
     "feature_health",
     "plot_01",
@@ -3271,6 +3866,14 @@ def run_ticker(cfg: RunConfig | str, **kwargs) -> dict[str, Any]:
                 exec(compile(src, f"<stage:{stage}>", "exec"), g, g)
             else:
                 exec(compile(src, f"<stage:{stage}>", "exec"), g, g)
+
+            if stage == "feature_registry" and cfg.active_features is not None:
+                af = set(cfg.active_features)
+                g["FEATURE_SPECS"] = [s for s in g["FEATURE_SPECS"] if s["name"] in af]
+                g["FEATURE_COLS"] = [s["name"] for s in g["FEATURE_SPECS"]]
+                g["FEATURE_MAX_SESSIONS"] = max(s["sessions_before_start"] for s in g["FEATURE_SPECS"])
+                if not cfg.quiet:
+                    print(f"[{g['TICKER']}] active_features override: {g['FEATURE_COLS']}")
 
             summary["stages_done"].append(stage)
             if not cfg.quiet:

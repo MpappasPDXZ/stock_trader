@@ -1,0 +1,151 @@
+{
+  "ticker": "CRM",
+  "run_id": "7dbe9a01070e",
+  "run_folder": "/Users/matthewpappas/code/ml_analysis/improves_CRM_2026-08-12",
+  "entry_rule": {
+    "ticker": "CRM",
+    "oos_n": 171,
+    "oos_positives": 78,
+    "oos_base_up_rate": 0.45614035087719296,
+    "oos_range": [
+      "2025-12-03",
+      "2026-08-10"
+    ],
+    "coin_floor": 0.5,
+    "base_floor": 0.45614035087719296,
+    "pass_floor": 0.5,
+    "min_trades": 10,
+    "raw_xgb_auc": 0.4460987041632203,
+    "oriented_auc": 0.5539012958367797,
+    "raw_spearman_ic": -0.09300149302049615,
+    "entry_score_definition": "1 - XGB_P(up)  [auto-invert: raw ranks anti-correlate with next-UP]",
+    "auto_invert": true,
+    "max_buy_precision": 0.7,
+    "is_discriminating": true,
+    "has_robust_precision_rule": true,
+    "entry_thr_mode": "composite",
+    "operating_entry_score_min": 0.74,
+    "composite_rule": {
+      "entry_score_min": 0.74,
+      "composite": 2.782608695652174,
+      "pct_prec": 0.9130434782608695,
+      "pct_gain": 0.9565217391304348,
+      "n_buys": 32,
+      "n_wins": 20,
+      "precision": 0.625,
+      "gain_captured": 0.12874767125097605,
+      "selection": "argmax(2*rank_pct(precision) + 1*rank_pct(gain_captured)) among thr with n\u2265min_trades"
+    },
+    "best_rule": {
+      "entry_score_min": 0.74,
+      "xgb_p_min": 0.74,
+      "max_precision_eligible_thr": 0.84,
+      "operator_entry_score_min": 0.74,
+      "n_buys": 32,
+      "n_wins": 20,
+      "precision": 0.625,
+      "recall": 0.2564102564102564,
+      "f1": 0.3636363636363636,
+      "beats_coin_50": true,
+      "beats_base_up": true,
+      "meets_target": true,
+      "gain_captured": 0.12874767125097605
+    },
+    "pending": {
+      "date": "2026-08-12",
+      "xgb_prob_up_raw": 0.48441994190216064,
+      "entry_score": 0.5155800580978394,
+      "enter_under_best_rule": false
+    },
+    "metrics_note": "precision=TP/(TP+FP). Eligible if precision > max(50%, base UP) and n\u2265min_trades. gain_captured = net \u03a3 r on buys / \u03a3 r on all UP days. Scale often \u226a100%; chart y2 autoscales."
+  },
+  "feature_health": {
+    "ticker": "CRM",
+    "n_rows": 250,
+    "oos_steps": 163,
+    "base_up": 0.488,
+    "auc_full_raw": 0.4921044640145764,
+    "auc_full_oriented": 0.5078955359854236,
+    "ic_full": -0.013617697171734982,
+    "model_beats_null": false,
+    "high_vif_features": [],
+    "high_corr_pairs": [],
+    "uni": [
+      {
+        "feature": "rsi_14",
+        "oos_auc": 0.5581536592772548,
+        "oos_ic": 0.10029957724566342,
+        "oos_auc_oriented": 0.5581536592772548,
+        "lift_vs_half": 0.0581536592772548
+      },
+      {
+        "feature": "obv_chg_z_20",
+        "oos_auc": 0.45293045854843605,
+        "oos_ic": -0.08118242544688162,
+        "oos_auc_oriented": 0.547069541451564,
+        "lift_vs_half": 0.047069541451563945
+      },
+      {
+        "feature": "bb_dist_lower",
+        "oos_auc": 0.42332219860309744,
+        "oos_ic": -0.13224878984088778,
+        "oos_auc_oriented": 0.5766778013969025,
+        "lift_vs_half": 0.0766778013969025
+      },
+      {
+        "feature": "vol_ratio_7_21",
+        "oos_auc": 0.4401761311873672,
+        "oos_ic": -0.1031802439550689,
+        "oos_auc_oriented": 0.5598238688126328,
+        "lift_vs_half": 0.0598238688126328
+      },
+      {
+        "feature": "near_high_200",
+        "oos_auc": 0.5291527482538718,
+        "oos_ic": 0.05028072801871377,
+        "oos_auc_oriented": 0.5291527482538718,
+        "lift_vs_half": 0.02915274825387182
+      }
+    ],
+    "ablation": [
+      {
+        "drop": "rsi_14",
+        "auc_oriented_without": 0.5113877922866686,
+        "delta_vs_full": 0.003492256301245056
+      },
+      {
+        "drop": "obv_chg_z_20",
+        "auc_oriented_without": 0.4722137868205284,
+        "delta_vs_full": -0.03568174916489519
+      },
+      {
+        "drop": "bb_dist_lower",
+        "auc_oriented_without": 0.4907379289401761,
+        "delta_vs_full": -0.01715760704524749
+      },
+      {
+        "drop": "vol_ratio_7_21",
+        "auc_oriented_without": 0.505314303067112,
+        "delta_vs_full": -0.0025812329183115823
+      },
+      {
+        "drop": "near_high_200",
+        "auc_oriented_without": 0.5320376556331612,
+        "delta_vs_full": 0.024142119647737603
+      }
+    ]
+  },
+  "pred": {
+    "ticker": "CRM",
+    "target_session": "2026-08-12",
+    "feature_asof": "2026-08-11",
+    "close_asof": 197.47000122070312,
+    "lasso_pred_logret": -0.0006050236093093468,
+    "lasso_implied_close": 197.35056334284562,
+    "lasso_pred_up": 0,
+    "xgb_prob_up": 0.48441994190216064,
+    "xgb_pred_up": 0,
+    "train_rows": 250,
+    "lasso_alpha": 0.0058780160722749115
+  }
+}

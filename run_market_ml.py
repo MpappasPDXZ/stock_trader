@@ -122,6 +122,12 @@ def main(argv: list[str] | None = None) -> int:
         help="Less per-stage logging",
     )
     p.add_argument(
+        "--active-features",
+        default=None,
+        help="Comma-separated feature names to use (default: all in FEATURE_SPECS). "
+             "Example: --active-features rsi_14,obv_chg_z_20,bb_dist_lower,vol_ratio_7_21,near_high_200,med_term_21wk,wick_asymmetry",
+    )
+    p.add_argument(
         "--summary-json",
         default=None,
         help="Write run summaries JSON to this path",
@@ -148,6 +154,10 @@ def main(argv: list[str] | None = None) -> int:
         f"Running {len(tickers)} ticker(s) with jobs={jobs} model_jobs={model_jobs}: "
         f"{', '.join(tickers)}"
     )
+    active_features = None
+    if args.active_features:
+        active_features = [f.strip() for f in args.active_features.split(",") if f.strip()]
+
     t0 = time.perf_counter()
     results = run_tickers(
         tickers,
@@ -166,6 +176,7 @@ def main(argv: list[str] | None = None) -> int:
         skip_plot_01=args.skip_plot_01,
         n_jobs_model=model_jobs,
         quiet=args.quiet,
+        active_features=active_features,
     )
     elapsed = time.perf_counter() - t0
 
