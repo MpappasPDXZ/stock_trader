@@ -34,6 +34,7 @@ _FIT_CACHE: dict[str, dict[str, Any]] = {}
 
 def cache_fitted(run_id: str, g: dict[str, Any]) -> None:
     """Stash the non-serialisable fitted objects + featureset from a run's exec globals."""
+    import json as _json
     _FIT_CACHE[run_id] = {
         "live_xgb": g.get("live_xgb"),
         "live_lasso": g.get("live_lasso"),
@@ -47,6 +48,9 @@ def cache_fitted(run_id: str, g: dict[str, Any]) -> None:
         "ticker": g.get("TICKER"),
         "predict_target_date": g.get("PREDICT_TARGET_DATE"),
         "train_rows": int(len(g["train_df"])) if "train_df" in g else None,
+        "entry_rule": g.get("summary_80"),
+        "feature_health": g.get("feature_health"),
+        "run_date": g.get("RUN_DATE"),
     }
 
 
@@ -157,15 +161,26 @@ def save_model(ticker: str, run_id: str, name: str) -> dict[str, Any]:
 
 
 def _build_model_card(run_id: str, ticker: str) -> dict[str, Any]:
-    """Pull discrimination / AUC / ablation from the run folder artifacts."""
+    """Pull discrimination / AUC / ablation from cached globals or run folder artifacts."""
     import glob
-    # Find the run folder for this ticker (most recent matching improves_{T}_*)
+    card: dict[str, Any] = {"ticker": ticker, "run_id": run_id}
+
+    cached = _FIT_CACHE.get(run_id)
+    if cached:
+        if cached.get("entry_rule"):
+            card["entry_rule"] = cached["entry_rule"]
+        if cached.get("feature_health"):
+            card["feature_health"] = cached["feature_health"]
+        if cached.get("run_date"):
+            card["run_folder"] = str(REPO_ROOT / "runs" / f"improves_{ticker}_{cached['run_date']}")
+        return card
+
+    # Fallback: read from the most recently modified run folder
     candidates = sorted(
-        (p for p in glob.glob(str(REPO_ROOT / f"improves_{ticker}_*")) if Path(p).is_dir()),
+        (p for p in glob.glob(str(REPO_ROOT / "runs" / f"improves_{ticker}_*")) if Path(p).is_dir()),
         key=lambda p: Path(p).stat().st_mtime,
         reverse=True,
     )
-    card: dict[str, Any] = {"ticker": ticker, "run_id": run_id}
     if not candidates:
         card["note"] = "no run folder found"
         return card
@@ -206,6 +221,14 @@ def list_models(ticker: str | None = None) -> list[dict[str, Any]]:
                 continue
             card_p = mdir / "model_card.json"
             card = json.loads(card_p.read_text()) if card_p.exists() else {}
+            # Last prediction made with this model (if any)
+            last_pred: dict[str, Any] = {}
+            lp_p = mdir / "last_pred.json"
+            if lp_p.exists():
+                try:
+                    last_pred = json.loads(lp_p.read_text())
+                except Exception:
+                    pass
             out.append({
                 "model_id": meta.get("model_id", mdir.name),
                 "ticker": tdir.name,
@@ -217,6 +240,11 @@ def list_models(ticker: str | None = None) -> list[dict[str, Any]]:
                 "train_rows": meta.get("train_rows"),
                 "is_discriminating": (card.get("entry_rule") or {}).get("is_discriminating"),
                 "oriented_auc": (card.get("entry_rule") or {}).get("oriented_auc"),
+                "precision": (card.get("entry_rule") or {}).get("best_rule", {}).get("precision"),
+                "n_buys": (card.get("entry_rule") or {}).get("best_rule", {}).get("n_buys"),
+                "n_wins": (card.get("entry_rule") or {}).get("best_rule", {}).get("n_wins"),
+                "run_folder": card.get("run_folder", ""),
+                "last_pred": last_pred,
             })
     return out
 

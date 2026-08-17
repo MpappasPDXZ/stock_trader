@@ -1,0 +1,60 @@
+{
+  "model_id": "GEV__backward-round-3-fred-marshallian-k__20260814200521",
+  "ticker": "GEV",
+  "name": "backward_round_3:_-fred_marshallian_k",
+  "run_id": "calibrate_GEV_1786755921",
+  "saved_at": 1786755921.718156,
+  "FEATURE_COLS": [
+    "obv_chg_z_20",
+    "bb_dist_lower",
+    "near_high_200",
+    "med_term_21wk"
+  ],
+  "FEATURE_SPECS": [
+    {
+      "name": "obv_chg_z_20",
+      "sessions_before_start": 21,
+      "title": "OBV change z-score (20)"
+    },
+    {
+      "name": "bb_dist_lower",
+      "sessions_before_start": 14,
+      "title": "Dist to lower BB (14, k=1.5)"
+    },
+    {
+      "name": "near_high_200",
+      "sessions_before_start": 200,
+      "title": "Nearness to 200d high (Close / peak High)"
+    },
+    {
+      "name": "med_term_21wk",
+      "sessions_before_start": 22,
+      "title": "ATR-normalized 21-session log return (medium-horizon momentum)"
+    }
+  ],
+  "feature_constants": {
+    "BB_WINDOW": 14,
+    "BB_K": 1.5,
+    "FEAT_RSI_SESSIONS": 14,
+    "FEAT_OBV_Z_SESSIONS": 20,
+    "FEAT_BB_SESSIONS": 14,
+    "FEAT_VOL_RATIO_SHORT": 7,
+    "FEAT_VOL_RATIO_LONG": 21,
+    "FEAT_NEAR_HIGH_SESSIONS": 200,
+    "FEAT_TREND_SESSIONS": 21,
+    "FEAT_ADX_SESSIONS": 14,
+    "FEAT_BODY_EMA": 3,
+    "FEAT_STRESS_Z_WEEKS": 52,
+    "FRED_FETCH_YEARS_BACK": 12,
+    "FEATURE_MAX_SESSIONS": 200,
+    "PRE_START_DAYS": 298,
+    "RANDOM_STATE": 42,
+    "MIN_TRAIN_MONTHS": 11,
+    "VAL_WINDOW_SESSIONS": 60
+  },
+  "auto_invert": false,
+  "entry_score_min": 0.85,
+  "chosen_alpha": 0.0074438030132516885,
+  "train_rows": 251,
+  "predict_target_date": "2026-08-17"
+}

@@ -27,6 +27,7 @@ from market_ml.pipeline import RunConfig, _STAGE_ORDER
 from market_ml.jobs import JOBS, run_stages
 from market_ml import models as M
 from market_ml import candidates as C
+from market_ml import calibration as CAL
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -196,14 +197,14 @@ app.add_middleware(
 # Helpers
 # --------------------------------------------------------------------------- #
 def _run_dirs_for_ticker(ticker: str) -> list[dict[str, Any]]:
-    """List ``improves_{TICKER}_*`` folders sorted by date desc.
+    """List ``runs/improves_{TICKER}_*`` folders sorted by date desc.
 
     Each entry includes ``decision`` ("BUY"/"SKIP"/None) read from the
     ``buy_decision_{date}_{TICKER}.json`` artifact when present.
     """
     import glob
     t = ticker.upper()
-    pattern = str(REPO_ROOT / f"improves_{t}_*")
+    pattern = str(REPO_ROOT / "runs" / f"improves_{t}_*")
     dirs = sorted(
         (p for p in glob.glob(pattern) if Path(p).is_dir()),
         key=lambda p: Path(p).name,
@@ -229,9 +230,9 @@ def _run_dirs_for_ticker(ticker: str) -> list[dict[str, Any]]:
 
 
 def _run_dir(ticker: str, date: str) -> Path:
-    d = REPO_ROOT / f"improves_{ticker.upper()}_{date}"
+    d = REPO_ROOT / "runs" / f"improves_{ticker.upper()}_{date}"
     if not d.is_dir():
-        raise HTTPException(404, f"run folder not found: improves_{ticker.upper()}_{date}")
+        raise HTTPException(404, f"run folder not found: runs/improves_{ticker.upper()}_{date}")
     return d
 
 
@@ -341,6 +342,24 @@ class LivePredictRequest(BaseModel):
     ticker: str
     target_date: str | None = None
     override_close: float | None = None
+
+
+class CalibrateRequest(BaseModel):
+    predict_target_date: str | None = None
+    val_window_sessions: int = 60
+    name: str | None = None
+    n_jobs_model: int = 2
+    features: list[str] | None = None
+
+
+class UpdateFeaturesRequest(BaseModel):
+    features: list[str]
+
+
+class PredictRequest(BaseModel):
+    predict_target_date: str | None = None
+    override_close: float | None = None
+    model_id: str | None = None
 
 
 # --------------------------------------------------------------------------- #
@@ -658,13 +677,90 @@ async def test_candidate(req: CandidateTestRequest) -> dict[str, Any]:
 
 
 # --------------------------------------------------------------------------- #
-# Tickers — discover all tickers with run folders
+# Calibration — per-ticker feature config + calibrate / predict lifecycle
 # --------------------------------------------------------------------------- #
+@app.get("/calibration")
+async def calibration_overview() -> dict[str, Any]:
+    """Calibration status for all configured tickers + the feature pool + pilot set."""
+    return {
+        "pool": CAL.get_feature_pool(),
+        "baseline_6f": CAL.load_config().get("baseline_6f", []),
+        "pilot": CAL.get_pilot_tickers(),
+        "tickers": CAL.calibration_status_all(),
+    }
+
+
+@app.get("/calibration/{ticker}")
+async def get_calibration(ticker: str, model_id: str | None = None) -> dict[str, Any]:
+    """Show calibration for this ticker: features, metrics, model_id.
+
+    If ``model_id`` query param is provided, returns that specific model's details.
+    Otherwise returns the most recent model.
+    If not yet calibrated, returns the configured feature set and ``calibrated: false``.
+    """
+    return CAL.calibration_status(ticker, model_id=model_id)
+
+
+@app.put("/calibration/{ticker}/features")
+async def update_ticker_features(ticker: str, req: UpdateFeaturesRequest) -> dict[str, Any]:
+    """Update the feature set for a ticker in the config."""
+    try:
+        CAL.set_ticker_features(ticker, req.features)
+        return {"ok": True, "ticker": ticker.upper(), "features": req.features}
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.post("/calibration/{ticker}")
+async def calibrate_ticker(ticker: str, req: CalibrateRequest) -> dict[str, Any]:
+    """Run a full pipeline calibration on the ticker's configured features and save the model.
+
+    Returns job_id for polling. When done, the saved model is the new calibration.
+    """
+    job_id = uuid.uuid4().hex[:12]
+    t = ticker.upper().strip()
+
+    def _run_job(job, args):
+        result = CAL.calibrate(
+            t,
+            predict_target_date=req.predict_target_date,
+            val_window_sessions=req.val_window_sessions,
+            name=req.name,
+            n_jobs_model=req.n_jobs_model,
+            features=req.features,
+        )
+        return result
+
+    JOBS.submit(job_id, "calibrate", _run_job, {"ticker": t})
+    return {"job_id": job_id, "ticker": t, "status": "queued"}
+
+
+@app.post("/calibration/{ticker}/predict")
+async def predict_with_calibration(ticker: str, req: PredictRequest) -> dict[str, Any]:
+    """Score the latest session through the ticker's saved calibration (no refit).
+
+    If ``override_close`` is provided, fetches today's intraday bar, overrides
+    the close, and predicts the next session through the saved model.
+    """
+    t = ticker.upper().strip()
+    job_id = uuid.uuid4().hex[:12]
+
+    def _run_job(job, args):
+        result = CAL.predict(
+            t,
+            predict_target_date=req.predict_target_date,
+            override_close=req.override_close,
+            model_id=req.model_id,
+        )
+        return result
+
+    JOBS.submit(job_id, "predict", _run_job, {"ticker": t})
+    return {"job_id": job_id, "ticker": t, "status": "queued"}
 @app.get("/tickers")
 async def list_tickers() -> dict[str, Any]:
     """List all tickers that have at least one run folder or cached data."""
     import glob
-    run_folders = glob.glob(str(REPO_ROOT / "improves_*"))
+    run_folders = glob.glob(str(REPO_ROOT / "runs" / "improves_*"))
     tickers: set[str] = set()
     for p in run_folders:
         name = Path(p).name
@@ -682,6 +778,23 @@ async def list_tickers() -> dict[str, Any]:
             if d.is_dir():
                 tickers.add(d.name)
     return {"tickers": sorted(tickers)}
+
+
+@app.get("/research/{ticker}")
+async def get_research(ticker: str) -> dict[str, Any]:
+    """Serve research markdown files for a ticker from the research/ directory."""
+    import glob
+    pattern = str(REPO_ROOT / "research" / f"{ticker.upper()}_*.md")
+    files = sorted(glob.glob(pattern), key=lambda p: Path(p).stat().st_mtime, reverse=True)
+    notes = []
+    for fp in files:
+        p = Path(fp)
+        notes.append({
+            "filename": p.name,
+            "content": p.read_text(),
+            "modified": p.stat().st_mtime,
+        })
+    return {"ticker": ticker.upper(), "notes": notes}
 
 
 # --------------------------------------------------------------------------- #

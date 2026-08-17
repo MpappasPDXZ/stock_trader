@@ -1,0 +1,170 @@
+{
+  "ticker": "CAT",
+  "run_id": "calibrate_CAT_1786761059",
+  "entry_rule": {
+    "ticker": "CAT",
+    "oos_n": 171,
+    "oos_positives": 94,
+    "oos_base_up_rate": 0.5497076023391813,
+    "oos_range": [
+      "2025-12-08",
+      "2026-08-13"
+    ],
+    "coin_floor": 0.5,
+    "base_floor": 0.5497076023391813,
+    "pass_floor": 0.5497076023391813,
+    "min_trades": 10,
+    "raw_xgb_auc": 0.6114038591558135,
+    "oriented_auc": 0.6114038591558135,
+    "raw_spearman_ic": 0.13144126412114615,
+    "entry_score_definition": "XGB_P(up)",
+    "auto_invert": false,
+    "max_buy_precision": 0.7021276595744681,
+    "is_discriminating": true,
+    "has_robust_precision_rule": true,
+    "entry_thr_mode": "composite",
+    "operating_entry_score_min": 0.93,
+    "composite_rule": {
+      "entry_score_min": 0.93,
+      "composite": 2.9347826086956523,
+      "pct_prec": 0.9782608695652174,
+      "pct_er": 0.9782608695652174,
+      "n_buys": 20,
+      "n_wins": 14,
+      "precision": 0.7,
+      "er_per_buy": 0.010128360979641754,
+      "gain_captured": 0.10481963195750157,
+      "selection": "argmax(2*rank_pct(precision) + 1*rank_pct(E[r|buy])) among thr with n\u2265min_trades"
+    },
+    "best_rule": {
+      "entry_score_min": 0.93,
+      "xgb_p_min": 0.93,
+      "max_precision_eligible_thr": 0.84,
+      "operator_entry_score_min": 0.93,
+      "n_buys": 20,
+      "n_wins": 14,
+      "precision": 0.7,
+      "recall": 0.14893617021276595,
+      "f1": 0.24561403508771928,
+      "beats_coin_50": true,
+      "beats_base_up": true,
+      "meets_target": true,
+      "er_per_buy": 0.010128360979641754,
+      "gain_captured": 0.10481963195750157
+    },
+    "pending": {
+      "date": "2026-08-17",
+      "xgb_prob_up_raw": 0.3419579863548279,
+      "entry_score": 0.3419579863548279,
+      "enter_under_best_rule": false
+    },
+    "metrics_note": "precision=TP/(TP+FP). Eligible if precision > max(50%, base UP) and n\u2265min_trades. E[r|buy] = net \u03a3 r on buys / n_buys (expected return per trade). gain_captured = net \u03a3 r on buys / \u03a3 r on all UP days (legacy, retained for reference)."
+  },
+  "feature_health": {
+    "ticker": "CAT",
+    "n_rows": 251,
+    "oos_steps": 164,
+    "base_up": 0.5617529880478087,
+    "auc_full_raw": 0.6314126570914399,
+    "auc_full_oriented": 0.6314126570914399,
+    "ic_full": 0.1601326352908497,
+    "model_beats_null": true,
+    "high_vif_features": [
+      "rsi_14"
+    ],
+    "high_corr_pairs": [
+      {
+        "a": "rsi_14",
+        "b": "near_high_200",
+        "r": 0.8759231409454039
+      },
+      {
+        "a": "rsi_14",
+        "b": "med_term_21wk",
+        "r": 0.8679575033200532
+      },
+      {
+        "a": "rsi_14",
+        "b": "bb_dist_lower",
+        "r": 0.8574820717131474
+      }
+    ],
+    "uni": [
+      {
+        "feature": "rsi_14",
+        "oos_auc": 0.6264815192500097,
+        "oos_ic": 0.09836348261788012,
+        "oos_auc_oriented": 0.6264815192500097,
+        "lift_vs_half": 0.11163983192188498
+      },
+      {
+        "feature": "bb_dist_lower",
+        "oos_auc": 0.6145883602415713,
+        "oos_ic": 0.12068342854172626,
+        "oos_auc_oriented": 0.6145883602415713,
+        "lift_vs_half": 0.09974667291344652
+      },
+      {
+        "feature": "vol_ratio_7_21",
+        "oos_auc": 0.5971303417528865,
+        "oos_ic": -0.033220384630840774,
+        "oos_auc_oriented": 0.585365978406442,
+        "lift_vs_half": 0.07052429107831726
+      },
+      {
+        "feature": "near_high_200",
+        "oos_auc": 0.5292584314326703,
+        "oos_ic": -0.0887607151855277,
+        "oos_auc_oriented": 0.6165495603232325,
+        "lift_vs_half": 0.10170787299510775
+      },
+      {
+        "feature": "med_term_21wk",
+        "oos_auc": 0.5595707552237369,
+        "oos_ic": -0.03140364484634167,
+        "oos_auc_oriented": 0.6202977557913745,
+        "lift_vs_half": 0.10545606846324973
+      },
+      {
+        "feature": "body_ratio_ema3",
+        "oos_auc": 0.6031914852551776,
+        "oos_ic": 0.09680627708830945,
+        "oos_auc_oriented": 0.6031914852551776,
+        "lift_vs_half": 0.08834979792705289
+      }
+    ],
+    "ablation": [
+      {
+        "drop": "rsi_14",
+        "auc_oriented_without": 0.5804005418194724,
+        "delta_vs_full": -0.05101211527196747
+      },
+      {
+        "drop": "bb_dist_lower",
+        "auc_oriented_without": 0.6183099746895753,
+        "delta_vs_full": -0.01310268240186463
+      },
+      {
+        "drop": "vol_ratio_7_21",
+        "auc_oriented_without": 0.6334732560787024,
+        "delta_vs_full": 0.0020605989872625186
+      },
+      {
+        "drop": "near_high_200",
+        "auc_oriented_without": 0.6454799621109493,
+        "delta_vs_full": 0.014067305019509369
+      },
+      {
+        "drop": "med_term_21wk",
+        "auc_oriented_without": 0.6150484523430348,
+        "delta_vs_full": -0.016364204748405053
+      },
+      {
+        "drop": "body_ratio_ema3",
+        "auc_oriented_without": 0.6427032222925433,
+        "delta_vs_full": 0.011290565201103386
+      }
+    ]
+  },
+  "run_folder": "/Users/matthewpappas/code/ml_analysis/runs/improves_CAT_2026-08-17"
+}

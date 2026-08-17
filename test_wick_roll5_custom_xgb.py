@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 """
-Test wick_asym_roll5 vs 6f baseline using custom XGBoost:
+6f baseline with custom XGBoost:
   - eval_metric='aucpr' (PR-AUC)
-  - Custom asymmetric objective: penalty_weight=5.0 (FP penalized 5x)
+  - Custom asymmetric objective: penalty_weight=1.25 (FP penalized 1.25x)
   - Native API xgb.train with early_stopping_rounds=10
   - 3 tickers in parallel
 
-10 tickers: CAT, MSFT, OUST, MU, GOOG, META, AMZN, CRM, GEV, PLTR
-2 variants: 6f baseline, 7f with wick_asym_roll5
+22 valid tickers (RACK and SKHY excluded — no data)
 
 Walk-forward returns raw OOS arrays (probs, actuals, returns).
 Threshold scan runs post-hoc with early-stop on precision decrease.
@@ -27,14 +26,14 @@ from sklearn.metrics import average_precision_score, roc_auc_score
 from scipy.stats import spearmanr
 
 # ─── Config ───
-TICKERS = ["CAT", "MSFT", "OUST", "MU", "GOOG", "META", "AMZN", "CRM", "GEV", "PLTR"]
+TICKERS = ["AMZN", "CAT", "CRM", "CSCO", "FLR", "GEV", "GOOG", "MCD", "META", "MHVIY",
+           "MSFT", "MU", "NFLX", "NOK", "OUST", "PLTR", "PWR", "SMERY", "SNDK", "VRT", "WMT", "XLI"]
 BASE_6 = "rsi_14,obv_chg_z_20,bb_dist_lower,vol_ratio_7_21,near_high_200,med_term_21wk"
 VARIANTS = {
-    "6f":       BASE_6,
-    "7f_roll5": f"{BASE_6},wick_asym_roll5",
+    "6f": BASE_6,
 }
 PARALLEL = 3
-PENALTY_WEIGHT = 5.0
+PENALTY_WEIGHT = 1.25
 NUM_BOOST_ROUND = 100
 EARLY_STOPPING = 10
 MIN_TRAIN = 80
@@ -161,7 +160,7 @@ def get_model_df(ticker: str, active_features: str) -> pd.DataFrame | None:
 
 
 # ─── Walk-forward with custom XGBoost (returns raw OOS arrays) ───
-def walk_forward(model_df: pd.DataFrame, feature_cols: list[str]) -> dict:
+def walk_forward(model_df: pd.DataFrame, feature_cols: list[str], ticker: str = "") -> dict:
     """
     Expanding walk-forward CV using custom XGBoost.
     Returns raw OOS arrays for post-hoc threshold scan.
@@ -236,9 +235,9 @@ def walk_forward(model_df: pd.DataFrame, feature_cols: list[str]) -> dict:
             closes = bars["Close"]
         else:
             data_dir = REPO / "data"
-            cp = data_dir / f"cache_ohlcv_hist_{g_ticker}.parquet"
+            cp = data_dir / f"cache_ohlcv_hist_{ticker}.parquet"
             if not cp.exists():
-                cp = data_dir / f"cache_ohlcv_{g_ticker}.parquet"
+                cp = data_dir / f"cache_ohlcv_{ticker}.parquet"
             closes = pd.read_parquet(cp)["Close"]
     except Exception:
         closes = None
@@ -409,7 +408,7 @@ def run_one_ticker_variant(args):
     if model_df is None:
         return {"ticker": ticker, "label": label, "error": "failed to get model_df"}
 
-    wf = walk_forward(model_df, feature_cols)
+    wf = walk_forward(model_df, feature_cols, ticker)
     elapsed = time.time() - t0
 
     if "error" in wf:
@@ -498,7 +497,7 @@ def main():
             }
         slim_results.append(slim)
 
-    out_path = REPO / "wick_roll5_custom_xgb_results.json"
+    out_path = REPO / "custom_xgb_6f_22tickers.json"
     out_path.write_text(json.dumps(slim_results, indent=2, default=str))
     print(f"Saved to {out_path}")
 
@@ -560,43 +559,6 @@ def main():
 
             print(f"{ticker:<7} {label:<9} {base_up:>8.1%} {pass_floor:>7.1%} {best_thr:>9.0%} {best_prec:>7.1%} {best_n_buys:>7} {best_n_wins:>7} {er_str:>9} {margin_str:>8} {pr_auc:>7.3f} {roc_auc:>8.3f} {ic:>7.3f} {invert:>7} {scanned:>8} {verdict:<10} {justify}")
 
-    # ─── Delta table ───
-    print(f"\n{'='*140}")
-    print(f"DELTA: 7f_roll5 vs 6f — discrimination comparison")
-    print(f"{'='*140}")
-    print(f"\n{'Ticker':<7} {'6f prec':>8} {'7f prec':>8} {'Δ prec':>8} {'6f thr':>7} {'7f thr':>7} {'6f n_buys':>10} {'7f n_buys':>10} {'6f verdict':<12} {'7f verdict':<12} {'7f discriminates?':<20}")
-    print("-" * 120)
-
-    for ticker in TICKERS:
-        s6 = scan_results.get((ticker, "6f"))
-        s7 = scan_results.get((ticker, "7f_roll5"))
-        if s6 is None or s7 is None:
-            print(f"{ticker:<7}  MISSING")
-            continue
-
-        p6 = s6["best_precision"] if s6["is_discriminating"] else s6["peak_precision"]
-        p7 = s7["best_precision"] if s7["is_discriminating"] else s7["peak_precision"]
-        delta = p7 - p6 if np.isfinite(p6) and np.isfinite(p7) else float("nan")
-
-        def verdict_str(s):
-            if s["is_discriminating"]:
-                return "PASS"
-            elif np.isfinite(s["peak_precision"]) and s["peak_precision"] > s["pass_floor"]:
-                return "MARGINAL"
-            else:
-                return "FAIL"
-
-        v6 = verdict_str(s6)
-        v7 = verdict_str(s7)
-        discrim7 = "YES" if v7 == "PASS" else ("MARGINAL" if v7 == "MARGINAL" else "NO")
-
-        thr6 = f"{s6['best_thr']:.0%}" if np.isfinite(s6["best_thr"]) else "N/A"
-        thr7 = f"{s7['best_thr']:.0%}" if np.isfinite(s7["best_thr"]) else "N/A"
-        nb6 = s6["best_n_buys"] if s6["is_discriminating"] else 0
-        nb7 = s7["best_n_buys"] if s7["is_discriminating"] else 0
-
-        print(f"{ticker:<7} {p6:>8.1%} {p7:>8.1%} {delta:>+8.1%} {thr6:>7} {thr7:>7} {nb6:>10} {nb7:>10} {v6:<12} {v7:<12} {discrim7:<20}")
-
     # ─── Summary counts ───
     print(f"\n{'='*80}")
     print("SUMMARY")
@@ -608,20 +570,30 @@ def main():
                    and scan_results.get((t, label), {}).get("peak_precision", 0) > scan_results.get((t, label), {}).get("pass_floor", 1))
         fails = len(TICKERS) - passes - marg
         avg_pr = np.nanmean([r.get("oos_pr_auc", float("nan")) for r in results if r.get("label") == label and "oos_pr_auc" in r])
-        print(f"  {label:<10}: PASS={passes}  MARGINAL={marg}  FAIL={fails}  (of {len(TICKERS)} tickers)  avg PR-AUC={avg_pr:.4f}")
+        avg_roc = np.nanmean([r.get("oos_roc_auc", float("nan")) for r in results if r.get("label") == label and "oos_roc_auc" in r])
+        print(f"  {label:<10}: PASS={passes}  MARGINAL={marg}  FAIL={fails}  (of {len(TICKERS)} tickers)  avg PR-AUC={avg_pr:.4f}  avg ROC-AUC={avg_roc:.4f}")
 
-    helped = sum(1 for t in TICKERS
-                 if (t, "6f") in scan_results and (t, "7f_roll5") in scan_results
-                 and scan_results[(t, "7f_roll5")]["best_precision"] > scan_results[(t, "6f")]["best_precision"] + 0.001
-                 if scan_results[(t, "6f")].get("is_discriminating")
-                 or scan_results[(t, "7f_roll5")].get("is_discriminating")
-                 or np.isfinite(scan_results[(t, "6f")].get("peak_precision", float("nan"))))
-    hurt = sum(1 for t in TICKERS
-               if (t, "6f") in scan_results and (t, "7f_roll5") in scan_results
-               and np.isfinite(scan_results[(t, "6f")].get("peak_precision", float("nan")))
-               and np.isfinite(scan_results[(t, "7f_roll5")].get("peak_precision", float("nan")))
-               and scan_results[(t, "7f_roll5")]["peak_precision"] < scan_results[(t, "6f")]["peak_precision"] - 0.001)
-    print(f"\n  7f_roll5 vs 6f: helped {helped}/10, hurt {hurt}/10 (by peak precision)")
+    # List tickers by verdict
+    print(f"\n  PASS tickers:")
+    for t in TICKERS:
+        s = scan_results.get((t, "6f"))
+        if s and s["is_discriminating"]:
+            print(f"    {t:<7} prec={s['best_precision']:.1%} thr={s['best_thr']:.0%} n_buys={s['best_n_buys']} margin=+{s['margin_vs_floor']:.1%}")
+    print(f"\n  MARGINAL tickers:")
+    for t in TICKERS:
+        s = scan_results.get((t, "6f"))
+        if s and not s["is_discriminating"] and np.isfinite(s["peak_precision"]) and s["peak_precision"] > s["pass_floor"]:
+            print(f"    {t:<7} peak_prec={s['peak_precision']:.1%} floor={s['pass_floor']:.1%} (n_buys < {MIN_TRADES})")
+    print(f"\n  FAIL tickers:")
+    for t in TICKERS:
+        s = scan_results.get((t, "6f"))
+        if s and not s["is_discriminating"]:
+            if not (np.isfinite(s["peak_precision"]) and s["peak_precision"] > s["pass_floor"]):
+                peak = s["peak_precision"]
+                if np.isfinite(peak):
+                    print(f"    {t:<7} peak_prec={peak:.1%} ≤ floor={s['pass_floor']:.1%}")
+                else:
+                    print(f"    {t:<7} no buys at any threshold")
 
 
 if __name__ == "__main__":

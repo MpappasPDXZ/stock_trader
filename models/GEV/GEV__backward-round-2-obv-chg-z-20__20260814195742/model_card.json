@@ -1,0 +1,153 @@
+{
+  "ticker": "GEV",
+  "run_id": "calibrate_GEV_1786755462",
+  "entry_rule": {
+    "ticker": "GEV",
+    "oos_n": 171,
+    "oos_positives": 91,
+    "oos_base_up_rate": 0.5321637426900585,
+    "oos_range": [
+      "2025-12-08",
+      "2026-08-13"
+    ],
+    "coin_floor": 0.5,
+    "base_floor": 0.5321637426900585,
+    "pass_floor": 0.5321637426900585,
+    "min_trades": 10,
+    "raw_xgb_auc": 0.6062615709605574,
+    "oriented_auc": 0.6062615709605574,
+    "raw_spearman_ic": 0.12180177418142699,
+    "entry_score_definition": "XGB_P(up)",
+    "auto_invert": false,
+    "max_buy_precision": 1.0,
+    "is_discriminating": true,
+    "has_robust_precision_rule": true,
+    "entry_thr_mode": "composite",
+    "operating_entry_score_min": 0.84,
+    "composite_rule": {
+      "entry_score_min": 0.84,
+      "composite": 2.739130434782609,
+      "pct_prec": 0.9782608695652174,
+      "pct_er": 0.782608695652174,
+      "n_buys": 17,
+      "n_wins": 13,
+      "precision": 0.7647058823529411,
+      "er_per_buy": 0.02287072998937353,
+      "gain_captured": 0.15647393831418,
+      "selection": "argmax(2*rank_pct(precision) + 1*rank_pct(E[r|buy])) among thr with n\u2265min_trades"
+    },
+    "best_rule": {
+      "entry_score_min": 0.84,
+      "xgb_p_min": 0.84,
+      "max_precision_eligible_thr": 0.84,
+      "operator_entry_score_min": 0.84,
+      "n_buys": 17,
+      "n_wins": 13,
+      "precision": 0.7647058823529411,
+      "recall": 0.14285714285714285,
+      "f1": 0.24074074074074076,
+      "beats_coin_50": true,
+      "beats_base_up": true,
+      "meets_target": true,
+      "er_per_buy": 0.02287072998937353,
+      "gain_captured": 0.15647393831418
+    },
+    "pending": {
+      "date": "2026-08-17",
+      "xgb_prob_up_raw": 0.9359215497970581,
+      "entry_score": 0.9359215497970581,
+      "enter_under_best_rule": true
+    },
+    "metrics_note": "precision=TP/(TP+FP). Eligible if precision > max(50%, base UP) and n\u2265min_trades. E[r|buy] = net \u03a3 r on buys / n_buys (expected return per trade). gain_captured = net \u03a3 r on buys / \u03a3 r on all UP days (legacy, retained for reference)."
+  },
+  "feature_health": {
+    "ticker": "GEV",
+    "n_rows": 251,
+    "oos_steps": 164,
+    "base_up": 0.50199203187251,
+    "auc_full_raw": 0.5824405057396352,
+    "auc_full_oriented": 0.5824405057396352,
+    "ic_full": 0.08864956343621747,
+    "model_beats_null": true,
+    "high_vif_features": [
+      "rsi_14"
+    ],
+    "high_corr_pairs": [
+      {
+        "a": "rsi_14",
+        "b": "near_high_200",
+        "r": 0.9157244664955162
+      },
+      {
+        "a": "rsi_14",
+        "b": "bb_dist_lower",
+        "r": 0.8725053585678331
+      }
+    ],
+    "uni": [
+      {
+        "feature": "rsi_14",
+        "oos_auc": 0.5238941089347766,
+        "oos_ic": -0.03135639580058347,
+        "oos_auc_oriented": 0.5652975180590574,
+        "lift_vs_half": 0.10009071653602919
+      },
+      {
+        "feature": "bb_dist_lower",
+        "oos_auc": 0.5477717836410625,
+        "oos_ic": 0.07187453687623453,
+        "oos_auc_oriented": 0.5477717836410625,
+        "lift_vs_half": 0.08256498211803431
+      },
+      {
+        "feature": "near_high_200",
+        "oos_auc": 0.5003963676798207,
+        "oos_ic": -0.010710209265219869,
+        "oos_auc_oriented": 0.5378045716270238,
+        "lift_vs_half": 0.0725977701039956
+      },
+      {
+        "feature": "med_term_21wk",
+        "oos_auc": 0.5001057587085773,
+        "oos_ic": -0.05484143298455957,
+        "oos_auc_oriented": 0.5398615410070557,
+        "lift_vs_half": 0.07465473948402757
+      },
+      {
+        "feature": "fred_marshallian_k",
+        "oos_auc": 0.5063984581352359,
+        "oos_ic": -0.044776417048569814,
+        "oos_auc_oriented": 0.5331699490499993,
+        "lift_vs_half": 0.06796314752697108
+      }
+    ],
+    "ablation": [
+      {
+        "drop": "rsi_14",
+        "auc_oriented_without": 0.5744613936499146,
+        "delta_vs_full": -0.007979112089720686
+      },
+      {
+        "drop": "bb_dist_lower",
+        "auc_oriented_without": 0.5617903234943944,
+        "delta_vs_full": -0.020650182245240845
+      },
+      {
+        "drop": "near_high_200",
+        "auc_oriented_without": 0.5391463408783019,
+        "delta_vs_full": -0.043294164861333306
+      },
+      {
+        "drop": "med_term_21wk",
+        "auc_oriented_without": 0.5595175952513257,
+        "delta_vs_full": -0.022922910488309522
+      },
+      {
+        "drop": "fred_marshallian_k",
+        "auc_oriented_without": 0.5881474587998894,
+        "delta_vs_full": 0.00570695306025415
+      }
+    ]
+  },
+  "run_folder": "/Users/matthewpappas/code/ml_analysis/runs/improves_GEV_2026-08-17"
+}

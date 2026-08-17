@@ -1,0 +1,165 @@
+{
+  "ticker": "GOOG",
+  "run_id": "calibrate_GOOG_1786972112",
+  "entry_rule": {
+    "ticker": "GOOG",
+    "oos_n": 169,
+    "oos_positives": 77,
+    "oos_base_up_rate": 0.4556213017751479,
+    "oos_range": [
+      "2025-12-10",
+      "2026-08-13"
+    ],
+    "coin_floor": 0.5,
+    "base_floor": 0.4556213017751479,
+    "pass_floor": 0.5,
+    "min_trades": 10,
+    "raw_xgb_auc": 0.47047504513640803,
+    "oriented_auc": 0.47047504513640803,
+    "raw_spearman_ic": 0.028007225334889797,
+    "entry_score_definition": "XGB_P(up)",
+    "auto_invert": false,
+    "max_buy_precision": 0.5416666666666666,
+    "is_discriminating": true,
+    "has_robust_precision_rule": true,
+    "entry_thr_mode": "composite",
+    "operating_entry_score_min": 0.82,
+    "composite_rule": {
+      "entry_score_min": 0.82,
+      "composite": 3.0,
+      "pct_prec": 1.0,
+      "pct_er": 1.0,
+      "n_buys": 24,
+      "n_wins": 13,
+      "precision": 0.5416666666666666,
+      "er_per_buy": 0.0036684916795907685,
+      "gain_captured": 0.06847847412215101,
+      "selection": "argmax(2*rank_pct(precision) + 1*rank_pct(E[r|buy])) among thr with n\u2265min_trades"
+    },
+    "best_rule": {
+      "entry_score_min": 0.82,
+      "xgb_p_min": 0.82,
+      "max_precision_eligible_thr": 0.82,
+      "operator_entry_score_min": 0.82,
+      "n_buys": 24,
+      "n_wins": 13,
+      "precision": 0.5416666666666666,
+      "recall": 0.16883116883116883,
+      "f1": 0.25742574257425743,
+      "beats_coin_50": true,
+      "beats_base_up": true,
+      "meets_target": true,
+      "er_per_buy": 0.0036684916795907685,
+      "gain_captured": 0.06847847412215101
+    },
+    "pending": {
+      "date": "2026-08-17",
+      "xgb_prob_up_raw": 0.3268236815929413,
+      "entry_score": 0.3268236815929413,
+      "enter_under_best_rule": false
+    },
+    "metrics_note": "precision=TP/(TP+FP). Eligible if precision > max(50%, base UP) and n\u2265min_trades. E[r|buy] = net \u03a3 r on buys / n_buys (expected return per trade). gain_captured = net \u03a3 r on buys / \u03a3 r on all UP days (legacy, retained for reference)."
+  },
+  "feature_health": {
+    "ticker": "GOOG",
+    "n_rows": 249,
+    "oos_steps": 162,
+    "base_up": 0.4979919678714859,
+    "auc_full_raw": 0.4737848937481655,
+    "auc_full_oriented": 0.4737848937481655,
+    "ic_full": 0.0181336068759949,
+    "model_beats_null": true,
+    "high_vif_features": [
+      "rsi_14"
+    ],
+    "high_corr_pairs": [
+      {
+        "a": "rsi_14",
+        "b": "med_term_21wk",
+        "r": 0.9173713403364612
+      },
+      {
+        "a": "rsi_14",
+        "b": "near_high_200",
+        "r": 0.9123271763134589
+      }
+    ],
+    "uni": [
+      {
+        "feature": "rsi_14",
+        "oos_auc": 0.47329518101007273,
+        "oos_ic": -0.022633918071497287,
+        "oos_auc_oriented": 0.5114569941944155,
+        "lift_vs_half": 0.05914259597111238
+      },
+      {
+        "feature": "obv_chg_z_20",
+        "oos_auc": 0.45596773655518297,
+        "oos_ic": -0.05651861413175054,
+        "oos_auc_oriented": 0.5079596068874468,
+        "lift_vs_half": 0.055645208664143686
+      },
+      {
+        "feature": "bb_dist_lower",
+        "oos_auc": 0.4441671028576522,
+        "oos_ic": -0.021575021319614376,
+        "oos_auc_oriented": 0.4729957003384073,
+        "lift_vs_half": 0.020681302115104216
+      },
+      {
+        "feature": "vol_ratio_7_21",
+        "oos_auc": 0.4588177253782264,
+        "oos_ic": 0.015221640808316889,
+        "oos_auc_oriented": 0.4588177253782264,
+        "lift_vs_half": 0.0065033271549233
+      },
+      {
+        "feature": "near_high_200",
+        "oos_auc": 0.43819630691118217,
+        "oos_ic": -0.0747845831017308,
+        "oos_auc_oriented": 0.5081538428134915,
+        "lift_vs_half": 0.055839444590188414
+      },
+      {
+        "feature": "med_term_21wk",
+        "oos_auc": 0.4541352377524081,
+        "oos_ic": -0.047517991740745766,
+        "oos_auc_oriented": 0.5441173016558606,
+        "lift_vs_half": 0.09180290343255748
+      }
+    ],
+    "ablation": [
+      {
+        "drop": "rsi_14",
+        "auc_oriented_without": 0.4546482398066053,
+        "delta_vs_full": -0.019136653941560222
+      },
+      {
+        "drop": "obv_chg_z_20",
+        "auc_oriented_without": 0.5095280344481883,
+        "delta_vs_full": 0.03574314070002277
+      },
+      {
+        "drop": "bb_dist_lower",
+        "auc_oriented_without": 0.4582852890647787,
+        "delta_vs_full": -0.015499604683386792
+      },
+      {
+        "drop": "vol_ratio_7_21",
+        "auc_oriented_without": 0.45822186176334734,
+        "delta_vs_full": -0.015563031984818176
+      },
+      {
+        "drop": "near_high_200",
+        "auc_oriented_without": 0.48936203764796904,
+        "delta_vs_full": 0.015577143899803525
+      },
+      {
+        "drop": "med_term_21wk",
+        "auc_oriented_without": 0.4852600004992914,
+        "delta_vs_full": 0.011475106751125896
+      }
+    ]
+  },
+  "run_folder": "/Users/matthewpappas/code/ml_analysis/runs/improves_GOOG_2026-08-17"
+}

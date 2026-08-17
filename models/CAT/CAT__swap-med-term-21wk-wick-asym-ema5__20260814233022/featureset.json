@@ -1,0 +1,72 @@
+{
+  "model_id": "CAT__swap-med-term-21wk-wick-asym-ema5__20260814233022",
+  "ticker": "CAT",
+  "name": "swap_med_term_21wk_->_wick_asym_ema5",
+  "run_id": "calibrate_CAT_1786768222",
+  "saved_at": 1786768222.1650162,
+  "FEATURE_COLS": [
+    "rsi_14",
+    "obv_chg_z_20",
+    "bb_dist_lower",
+    "vol_ratio_7_21",
+    "near_high_200",
+    "wick_asym_ema5"
+  ],
+  "FEATURE_SPECS": [
+    {
+      "name": "rsi_14",
+      "sessions_before_start": 15,
+      "title": "RSI (Wilder 14)"
+    },
+    {
+      "name": "obv_chg_z_20",
+      "sessions_before_start": 21,
+      "title": "OBV change z-score (20)"
+    },
+    {
+      "name": "bb_dist_lower",
+      "sessions_before_start": 14,
+      "title": "Dist to lower BB (14, k=1.5)"
+    },
+    {
+      "name": "vol_ratio_7_21",
+      "sessions_before_start": 21,
+      "title": "GK vol ratio 7/21"
+    },
+    {
+      "name": "near_high_200",
+      "sessions_before_start": 200,
+      "title": "Nearness to 200d high (Close / peak High)"
+    },
+    {
+      "name": "wick_asym_ema5",
+      "sessions_before_start": 6,
+      "title": "EMA(5) of wick_asymmetry \u2014 medium-smoothed candle rejection"
+    }
+  ],
+  "feature_constants": {
+    "BB_WINDOW": 14,
+    "BB_K": 1.5,
+    "FEAT_RSI_SESSIONS": 14,
+    "FEAT_OBV_Z_SESSIONS": 20,
+    "FEAT_BB_SESSIONS": 14,
+    "FEAT_VOL_RATIO_SHORT": 7,
+    "FEAT_VOL_RATIO_LONG": 21,
+    "FEAT_NEAR_HIGH_SESSIONS": 200,
+    "FEAT_TREND_SESSIONS": 21,
+    "FEAT_ADX_SESSIONS": 14,
+    "FEAT_BODY_EMA": 3,
+    "FEAT_STRESS_Z_WEEKS": 52,
+    "FRED_FETCH_YEARS_BACK": 12,
+    "FEATURE_MAX_SESSIONS": 200,
+    "PRE_START_DAYS": 298,
+    "RANDOM_STATE": 42,
+    "MIN_TRAIN_MONTHS": 11,
+    "VAL_WINDOW_SESSIONS": 60
+  },
+  "auto_invert": false,
+  "entry_score_min": 0.83,
+  "chosen_alpha": 0.1,
+  "train_rows": 251,
+  "predict_target_date": "2026-08-17"
+}

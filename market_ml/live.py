@@ -94,8 +94,8 @@ def fetch_live_bar(
 # 2. Helpers — calibration artifact reuse
 # --------------------------------------------------------------------------- #
 def _find_recent_artifact(ticker: str, repo_root: Path, pattern: str) -> Path | None:
-    """Most recent matching artifact across all improves_{TICKER}_* folders."""
-    matches = sorted(repo_root.glob(f"improves_{ticker}_*/{pattern}"))
+    """Most recent matching artifact across all runs/improves_{TICKER}_* folders."""
+    matches = sorted(repo_root.glob(f"runs/improves_{ticker}_*/{pattern}"))
     return matches[-1] if matches else None
 
 

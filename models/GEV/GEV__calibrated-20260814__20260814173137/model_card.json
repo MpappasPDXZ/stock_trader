@@ -1,0 +1,346 @@
+{
+  "ticker": "GEV",
+  "run_id": "calibrate_GEV_1786746697",
+  "run_folder": "/Users/matthewpappas/code/ml_analysis/runs/improves_GEV_2026-08-17",
+  "entry_rule": {
+    "ticker": "GEV",
+    "oos_n": 171,
+    "oos_positives": 91,
+    "oos_base_up_rate": 0.5321637426900585,
+    "oos_range": [
+      "2025-12-08",
+      "2026-08-13"
+    ],
+    "coin_floor": 0.5,
+    "base_floor": 0.5321637426900585,
+    "pass_floor": 0.5321637426900585,
+    "min_trades": 10,
+    "raw_xgb_auc": 0.5442307692307692,
+    "oriented_auc": 0.5442307692307692,
+    "raw_spearman_ic": 0.07645257560705553,
+    "entry_score_definition": "XGB_P(up)",
+    "auto_invert": false,
+    "max_buy_precision": 1.0,
+    "is_discriminating": true,
+    "has_robust_precision_rule": true,
+    "entry_thr_mode": "composite",
+    "operating_entry_score_min": 0.81,
+    "composite_rule": {
+      "entry_score_min": 0.81,
+      "composite": 2.6818181818181817,
+      "pct_prec": 0.8636363636363636,
+      "pct_er": 0.9545454545454546,
+      "n_buys": 25,
+      "n_wins": 17,
+      "precision": 0.68,
+      "er_per_buy": 0.010561630311698003,
+      "gain_captured": 0.1062635037080657,
+      "selection": "argmax(2*rank_pct(precision) + 1*rank_pct(E[r|buy])) among thr with n\u2265min_trades"
+    },
+    "best_rule": {
+      "entry_score_min": 0.81,
+      "xgb_p_min": 0.81,
+      "max_precision_eligible_thr": 0.82,
+      "operator_entry_score_min": 0.81,
+      "n_buys": 25,
+      "n_wins": 17,
+      "precision": 0.68,
+      "recall": 0.18681318681318682,
+      "f1": 0.2931034482758621,
+      "beats_coin_50": true,
+      "beats_base_up": true,
+      "meets_target": true,
+      "er_per_buy": 0.010561630311698003,
+      "gain_captured": 0.1062635037080657
+    },
+    "pending": {
+      "date": "2026-08-17",
+      "xgb_prob_up_raw": 0.8431717753410339,
+      "entry_score": 0.8431717753410339,
+      "enter_under_best_rule": true
+    },
+    "metrics_note": "precision=TP/(TP+FP). Eligible if precision > max(50%, base UP) and n\u2265min_trades. E[r|buy] = net \u03a3 r on buys / n_buys (expected return per trade). gain_captured = net \u03a3 r on buys / \u03a3 r on all UP days (legacy, retained for reference)."
+  },
+  "feature_health": {
+    "ticker": "GEV",
+    "n_rows": 251,
+    "oos_steps": 164,
+    "base_up": 0.50199203187251,
+    "auc_full_raw": 0.4412598895357516,
+    "auc_full_oriented": 0.5587401104642484,
+    "ic_full": -0.10155343002081972,
+    "model_beats_null": true,
+    "high_vif_features": [
+      "wick_asym_ema5",
+      "wick_asym_ema3",
+      "rsi_14",
+      "di_spread",
+      "wick_asymmetry"
+    ],
+    "high_corr_pairs": [
+      {
+        "a": "wick_asym_ema3",
+        "b": "wick_asym_ema5",
+        "r": 0.9683217605767407
+      },
+      {
+        "a": "rsi_14",
+        "b": "di_spread",
+        "r": 0.9204264543451447
+      },
+      {
+        "a": "rsi_14",
+        "b": "near_high_200",
+        "r": 0.9157244664955162
+      },
+      {
+        "a": "rsi_14",
+        "b": "bb_dist_lower",
+        "r": 0.8725053585678331
+      },
+      {
+        "a": "wick_asymmetry",
+        "b": "wick_asym_ema3",
+        "r": 0.8595689622462531
+      },
+      {
+        "a": "wick_asym_ema5",
+        "b": "wick_asym_roll5",
+        "r": 0.8533007019540884
+      }
+    ],
+    "uni": [
+      {
+        "feature": "rsi_14",
+        "oos_auc": 0.48186296462158534,
+        "oos_ic": -0.03135639580058347,
+        "oos_auc_oriented": 0.5181370353784147,
+        "lift_vs_half": 0.018137035378414712
+      },
+      {
+        "feature": "obv_chg_z_20",
+        "oos_auc": 0.5129123749813406,
+        "oos_ic": 0.022323689191361896,
+        "oos_auc_oriented": 0.5129123749813406,
+        "lift_vs_half": 0.012912374981340569
+      },
+      {
+        "feature": "bb_dist_lower",
+        "oos_auc": 0.5415733691595761,
+        "oos_ic": 0.07187453687623453,
+        "oos_auc_oriented": 0.5415733691595761,
+        "lift_vs_half": 0.0415733691595761
+      },
+      {
+        "feature": "vol_ratio_7_21",
+        "oos_auc": 0.4675324675324676,
+        "oos_ic": -0.05613181964301978,
+        "oos_auc_oriented": 0.5324675324675324,
+        "lift_vs_half": 0.03246753246753242
+      },
+      {
+        "feature": "near_high_200",
+        "oos_auc": 0.4938050455291835,
+        "oos_ic": -0.010710209265219869,
+        "oos_auc_oriented": 0.5061949544708165,
+        "lift_vs_half": 0.006194954470816527
+      },
+      {
+        "feature": "med_term_21wk",
+        "oos_auc": 0.46827884758919247,
+        "oos_ic": -0.05484143298455957,
+        "oos_auc_oriented": 0.5317211524108075,
+        "lift_vs_half": 0.03172115241080753
+      },
+      {
+        "feature": "adx_14",
+        "oos_auc": 0.4920137333930438,
+        "oos_ic": -0.013807137245524407,
+        "oos_auc_oriented": 0.5079862666069562,
+        "lift_vs_half": 0.007986266606956227
+      },
+      {
+        "feature": "di_spread",
+        "oos_auc": 0.458277354829079,
+        "oos_ic": -0.07213261420792659,
+        "oos_auc_oriented": 0.541722645170921,
+        "lift_vs_half": 0.04172264517092095
+      },
+      {
+        "feature": "body_ratio_ema3",
+        "oos_auc": 0.5323182564561875,
+        "oos_ic": 0.055873742311327745,
+        "oos_auc_oriented": 0.5323182564561875,
+        "lift_vs_half": 0.032318256456187466
+      },
+      {
+        "feature": "wick_asymmetry",
+        "oos_auc": 0.44857441409165544,
+        "oos_ic": -0.08890764076790951,
+        "oos_auc_oriented": 0.5514255859083446,
+        "lift_vs_half": 0.05142558590834456
+      },
+      {
+        "feature": "wick_asym_ema3",
+        "oos_auc": 0.4690252276459173,
+        "oos_ic": -0.05355104632609934,
+        "oos_auc_oriented": 0.5309747723540827,
+        "lift_vs_half": 0.030974772354082747
+      },
+      {
+        "feature": "wick_asym_ema5",
+        "oos_auc": 0.4203612479474549,
+        "oos_ic": -0.13768425645770602,
+        "oos_auc_oriented": 0.5796387520525451,
+        "lift_vs_half": 0.07963875205254511
+      },
+      {
+        "feature": "wick_asym_roll5",
+        "oos_auc": 0.4442454097626512,
+        "oos_ic": -0.09639188338697881,
+        "oos_auc_oriented": 0.5557545902373489,
+        "lift_vs_half": 0.055754590237348856
+      },
+      {
+        "feature": "close_loc_value",
+        "oos_auc": 0.4736527839976116,
+        "oos_ic": -0.04555064904364595,
+        "oos_auc_oriented": 0.5263472160023883,
+        "lift_vs_half": 0.02634721600238832
+      },
+      {
+        "feature": "fred_yield_slope",
+        "oos_auc": 0.40349305866547247,
+        "oos_ic": -0.16684699493890712,
+        "oos_auc_oriented": 0.5965069413345275,
+        "lift_vs_half": 0.09650694133452753
+      },
+      {
+        "feature": "fred_stress_z",
+        "oos_auc": 0.4912673533363189,
+        "oos_ic": -0.015097523903984634,
+        "oos_auc_oriented": 0.5087326466636811,
+        "lift_vs_half": 0.00873264666368112
+      },
+      {
+        "feature": "fred_real_yield",
+        "oos_auc": 0.35915808329601434,
+        "oos_ic": -0.24349596245144448,
+        "oos_auc_oriented": 0.6408419167039856,
+        "lift_vs_half": 0.1408419167039856
+      },
+      {
+        "feature": "fred_marshallian_k",
+        "oos_auc": 0.4741006120316465,
+        "oos_ic": -0.044776417048569814,
+        "oos_auc_oriented": 0.5258993879683536,
+        "lift_vs_half": 0.02589938796835356
+      }
+    ],
+    "ablation": [
+      {
+        "drop": "rsi_14",
+        "auc_oriented_without": 0.5573966263621435,
+        "delta_vs_full": -0.0013434841021049415
+      },
+      {
+        "drop": "obv_chg_z_20",
+        "auc_oriented_without": 0.5385878489326765,
+        "delta_vs_full": -0.020152261531571902
+      },
+      {
+        "drop": "bb_dist_lower",
+        "auc_oriented_without": 0.5620241827138379,
+        "delta_vs_full": 0.003284072249589487
+      },
+      {
+        "drop": "vol_ratio_7_21",
+        "auc_oriented_without": 0.5487386177041349,
+        "delta_vs_full": -0.010001492760113528
+      },
+      {
+        "drop": "near_high_200",
+        "auc_oriented_without": 0.5659053590088072,
+        "delta_vs_full": 0.0071652485445588
+      },
+      {
+        "drop": "med_term_21wk",
+        "auc_oriented_without": 0.5824749962680997,
+        "delta_vs_full": 0.023734885803851302
+      },
+      {
+        "drop": "adx_14",
+        "auc_oriented_without": 0.5378414688759516,
+        "delta_vs_full": -0.020898641588296796
+      },
+      {
+        "drop": "di_spread",
+        "auc_oriented_without": 0.5435139573070608,
+        "delta_vs_full": -0.015226153157187672
+      },
+      {
+        "drop": "body_ratio_ema3",
+        "auc_oriented_without": 0.5520226899537245,
+        "delta_vs_full": -0.00671742051052393
+      },
+      {
+        "drop": "wick_asymmetry",
+        "auc_oriented_without": 0.5553067622033139,
+        "delta_vs_full": -0.0034333482609345545
+      },
+      {
+        "drop": "wick_asym_ema3",
+        "auc_oriented_without": 0.5591879384982834,
+        "delta_vs_full": 0.0004478280340349805
+      },
+      {
+        "drop": "wick_asym_ema5",
+        "auc_oriented_without": 0.5536647260785192,
+        "delta_vs_full": -0.005075384385729187
+      },
+      {
+        "drop": "wick_asym_roll5",
+        "auc_oriented_without": 0.541722645170921,
+        "delta_vs_full": -0.017017465293327483
+      },
+      {
+        "drop": "close_loc_value",
+        "auc_oriented_without": 0.5584415584415584,
+        "delta_vs_full": -0.000298552022690024
+      },
+      {
+        "drop": "fred_yield_slope",
+        "auc_oriented_without": 0.5694879832810866,
+        "delta_vs_full": 0.0107478728168382
+      },
+      {
+        "drop": "fred_stress_z",
+        "auc_oriented_without": 0.5533661740558291,
+        "delta_vs_full": -0.005373936408419322
+      },
+      {
+        "drop": "fred_real_yield",
+        "auc_oriented_without": 0.555157486191969,
+        "delta_vs_full": -0.0035826242722794
+      },
+      {
+        "drop": "fred_marshallian_k",
+        "auc_oriented_without": 0.5653082549634274,
+        "delta_vs_full": 0.006568144499178974
+      }
+    ]
+  },
+  "pred": {
+    "ticker": "GEV",
+    "target_session": "2026-08-17",
+    "feature_asof": "2026-08-14",
+    "close_asof": 1063.25,
+    "lasso_pred_logret": 0.00212418382308751,
+    "lasso_implied_close": 1065.5109389246998,
+    "lasso_pred_up": 1,
+    "xgb_prob_up": 0.8431717753410339,
+    "xgb_pred_up": 1,
+    "train_rows": 251,
+    "lasso_alpha": 0.0074438030132516885
+  }
+}

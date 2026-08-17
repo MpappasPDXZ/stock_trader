@@ -135,13 +135,19 @@ def run_stages(
     up_to: str | None = None,
     skip: tuple[str, ...] = (),
     quiet: bool = False,
+    _globals: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Exec canonical stages into a fresh globals dict and return (g, summary).
+    """Exec canonical stages into a globals dict and return (g, summary).
 
     ``up_to`` runs stages through that stage (inclusive). ``skip`` drops stages.
+    ``_globals`` — if provided, resume into an existing globals dict (skips
+    stages already executed, identified by keys they set).  Starts fresh otherwise.
     """
-    g: dict[str, Any] = {"__builtins__": __builtins__}
-    _seed_globals(g)
+    if _globals is not None:
+        g = _globals
+    else:
+        g: dict[str, Any] = {"__builtins__": __builtins__}
+        _seed_globals(g)
 
     stages = list(_STAGE_ORDER)
     if up_to is not None:
@@ -165,6 +171,13 @@ def run_stages(
                 _apply_overrides(cfg, g)
             else:
                 exec(compile(src, f"<stage:{stage}>", "exec"), g, g)
+            if stage == "feature_registry" and cfg.active_features is not None:
+                af = set(cfg.active_features)
+                g["FEATURE_SPECS"] = [s for s in g["FEATURE_SPECS"] if s["name"] in af]
+                g["FEATURE_COLS"] = [s["name"] for s in g["FEATURE_SPECS"]]
+                g["FEATURE_MAX_SESSIONS"] = max(s["sessions_before_start"] for s in g["FEATURE_SPECS"])
+                if not quiet:
+                    print(f"[{g['TICKER']}] active_features override: {g['FEATURE_COLS']}")
             summary["stages_done"].append(stage)
             if not quiet:
                 print(f"[{g.get('TICKER', cfg.ticker)}] stage ok: {stage}")

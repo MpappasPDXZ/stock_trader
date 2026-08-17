@@ -1,0 +1,158 @@
+{
+  "ticker": "MSFT",
+  "run_id": "calibrate_MSFT_1786972163",
+  "entry_rule": {
+    "ticker": "MSFT",
+    "oos_n": 169,
+    "oos_positives": 81,
+    "oos_base_up_rate": 0.47928994082840237,
+    "oos_range": [
+      "2025-12-10",
+      "2026-08-13"
+    ],
+    "coin_floor": 0.5,
+    "base_floor": 0.47928994082840237,
+    "pass_floor": 0.5,
+    "min_trades": 10,
+    "raw_xgb_auc": 0.43298709632993915,
+    "oriented_auc": 0.5312221404081391,
+    "raw_spearman_ic": -0.11775230428583884,
+    "entry_score_definition": "1 - XGB_P(up)  [auto-invert: raw ranks anti-correlate with next-UP]",
+    "auto_invert": true,
+    "max_buy_precision": 1.0,
+    "is_discriminating": true,
+    "has_robust_precision_rule": true,
+    "entry_thr_mode": "composite",
+    "operating_entry_score_min": 0.67,
+    "composite_rule": {
+      "entry_score_min": 0.67,
+      "composite": 2.7555555555555555,
+      "pct_prec": 0.9111111111111111,
+      "pct_er": 0.9333333333333333,
+      "n_buys": 31,
+      "n_wins": 18,
+      "precision": 0.5806451612903226,
+      "er_per_buy": 0.002976368388088697,
+      "gain_captured": 0.06811600379409609,
+      "selection": "argmax(2*rank_pct(precision) + 1*rank_pct(E[r|buy])) among thr with n\u2265min_trades"
+    },
+    "best_rule": {
+      "entry_score_min": 0.67,
+      "xgb_p_min": 0.67,
+      "max_precision_eligible_thr": 0.67,
+      "operator_entry_score_min": 0.67,
+      "n_buys": 31,
+      "n_wins": 18,
+      "precision": 0.5806451612903226,
+      "recall": 0.2222222222222222,
+      "f1": 0.3214285714285714,
+      "beats_coin_50": true,
+      "beats_base_up": true,
+      "meets_target": true,
+      "er_per_buy": 0.002976368388088697,
+      "gain_captured": 0.06811600379409609
+    },
+    "pending": {
+      "date": "2026-08-17",
+      "xgb_prob_up_raw": 0.4193142354488373,
+      "entry_score": 0.5806857645511627,
+      "enter_under_best_rule": false
+    },
+    "metrics_note": "precision=TP/(TP+FP). Eligible if precision > max(50%, base UP) and n\u2265min_trades. E[r|buy] = net \u03a3 r on buys / n_buys (expected return per trade). gain_captured = net \u03a3 r on buys / \u03a3 r on all UP days (legacy, retained for reference)."
+  },
+  "feature_health": {
+    "ticker": "MSFT",
+    "n_rows": 249,
+    "oos_steps": 162,
+    "base_up": 0.4979919678714859,
+    "auc_full_raw": 0.4107853153073777,
+    "auc_full_oriented": 0.5413648094402238,
+    "ic_full": -0.14154304442349266,
+    "model_beats_null": true,
+    "high_vif_features": [],
+    "high_corr_pairs": [
+      {
+        "a": "rsi_14",
+        "b": "med_term_21wk",
+        "r": 0.8513789350952196
+      }
+    ],
+    "uni": [
+      {
+        "feature": "rsi_14",
+        "oos_auc": 0.4136350107582176,
+        "oos_ic": -0.13863553090592326,
+        "oos_auc_oriented": 0.5253040049727842,
+        "lift_vs_half": 0.1079481594900088
+      },
+      {
+        "feature": "obv_chg_z_20",
+        "oos_auc": 0.49215196208036743,
+        "oos_ic": 0.04612373716507837,
+        "oos_auc_oriented": 0.49215196208036743,
+        "lift_vs_half": 0.07479611659759205
+      },
+      {
+        "feature": "bb_dist_lower",
+        "oos_auc": 0.473060904443871,
+        "oos_ic": -0.01678428257869614,
+        "oos_auc_oriented": 0.5245124477430225,
+        "lift_vs_half": 0.10715660226024715
+      },
+      {
+        "feature": "vol_ratio_7_21",
+        "oos_auc": 0.500417197999118,
+        "oos_ic": 0.0191631572748893,
+        "oos_auc_oriented": 0.500417197999118,
+        "lift_vs_half": 0.08306135251634261
+      },
+      {
+        "feature": "near_high_200",
+        "oos_auc": 0.4726562058332457,
+        "oos_ic": -0.039251432487187043,
+        "oos_auc_oriented": 0.5292227272526696,
+        "lift_vs_half": 0.11186688176989423
+      },
+      {
+        "feature": "med_term_21wk",
+        "oos_auc": 0.46322392656812295,
+        "oos_ic": -0.11722565864018486,
+        "oos_auc_oriented": 0.5681087945220187,
+        "lift_vs_half": 0.1507529490392433
+      }
+    ],
+    "ablation": [
+      {
+        "drop": "rsi_14",
+        "auc_oriented_without": 0.52572489522357,
+        "delta_vs_full": -0.015639914216653783
+      },
+      {
+        "drop": "obv_chg_z_20",
+        "auc_oriented_without": 0.5331258657258495,
+        "delta_vs_full": -0.00823894371437428
+      },
+      {
+        "drop": "bb_dist_lower",
+        "auc_oriented_without": 0.5154694333127126,
+        "delta_vs_full": -0.02589537612751125
+      },
+      {
+        "drop": "vol_ratio_7_21",
+        "auc_oriented_without": 0.5505754669875231,
+        "delta_vs_full": 0.009210657547299328
+      },
+      {
+        "drop": "near_high_200",
+        "auc_oriented_without": 0.5495329408062013,
+        "delta_vs_full": 0.008168131365977493
+      },
+      {
+        "drop": "med_term_21wk",
+        "auc_oriented_without": 0.52777083811795,
+        "delta_vs_full": -0.013593971322273801
+      }
+    ]
+  },
+  "run_folder": "/Users/matthewpappas/code/ml_analysis/runs/improves_MSFT_2026-08-17"
+}

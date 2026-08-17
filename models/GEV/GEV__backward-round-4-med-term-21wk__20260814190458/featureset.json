@@ -1,0 +1,48 @@
+{
+  "model_id": "GEV__backward-round-4-med-term-21wk__20260814190458",
+  "ticker": "GEV",
+  "name": "backward_round_4:_-med_term_21wk",
+  "run_id": "calibrate_GEV_1786752298",
+  "saved_at": 1786752298.44459,
+  "FEATURE_COLS": [
+    "vol_ratio_7_21",
+    "near_high_200"
+  ],
+  "FEATURE_SPECS": [
+    {
+      "name": "vol_ratio_7_21",
+      "sessions_before_start": 21,
+      "title": "GK vol ratio 7/21"
+    },
+    {
+      "name": "near_high_200",
+      "sessions_before_start": 200,
+      "title": "Nearness to 200d high (Close / peak High)"
+    }
+  ],
+  "feature_constants": {
+    "BB_WINDOW": 14,
+    "BB_K": 1.5,
+    "FEAT_RSI_SESSIONS": 14,
+    "FEAT_OBV_Z_SESSIONS": 20,
+    "FEAT_BB_SESSIONS": 14,
+    "FEAT_VOL_RATIO_SHORT": 7,
+    "FEAT_VOL_RATIO_LONG": 21,
+    "FEAT_NEAR_HIGH_SESSIONS": 200,
+    "FEAT_TREND_SESSIONS": 21,
+    "FEAT_ADX_SESSIONS": 14,
+    "FEAT_BODY_EMA": 3,
+    "FEAT_STRESS_Z_WEEKS": 52,
+    "FRED_FETCH_YEARS_BACK": 12,
+    "FEATURE_MAX_SESSIONS": 200,
+    "PRE_START_DAYS": 298,
+    "RANDOM_STATE": 42,
+    "MIN_TRAIN_MONTHS": 11,
+    "VAL_WINDOW_SESSIONS": 60
+  },
+  "auto_invert": false,
+  "entry_score_min": 0.81,
+  "chosen_alpha": 0.0074438030132516885,
+  "train_rows": 251,
+  "predict_target_date": "2026-08-17"
+}

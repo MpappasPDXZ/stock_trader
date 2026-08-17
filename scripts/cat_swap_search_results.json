@@ -1,0 +1,1016 @@
+{
+  "ticker": "CAT",
+  "baseline_auc": 0.5861404770934502,
+  "threshold": 0.015,
+  "all_swaps": [
+    {
+      "drop": "near_high_200",
+      "add": "adx_14",
+      "features": [
+        "rsi_14",
+        "obv_chg_z_20",
+        "bb_dist_lower",
+        "vol_ratio_7_21",
+        "med_term_21wk",
+        "adx_14"
+      ],
+      "auc": 0.7020958565534643,
+      "delta": 0.11595537946001411
+    },
+    {
+      "drop": "vol_ratio_7_21",
+      "add": "adx_14",
+      "features": [
+        "rsi_14",
+        "obv_chg_z_20",
+        "bb_dist_lower",
+        "near_high_200",
+        "med_term_21wk",
+        "adx_14"
+      ],
+      "auc": 0.6622576671819825,
+      "delta": 0.07611719008853235
+    },
+    {
+      "drop": "obv_chg_z_20",
+      "add": "adx_14",
+      "features": [
+        "rsi_14",
+        "bb_dist_lower",
+        "vol_ratio_7_21",
+        "near_high_200",
+        "med_term_21wk",
+        "adx_14"
+      ],
+      "auc": 0.6608602448284564,
+      "delta": 0.07471976773500622
+    },
+    {
+      "drop": "med_term_21wk",
+      "add": "adx_14",
+      "features": [
+        "rsi_14",
+        "obv_chg_z_20",
+        "bb_dist_lower",
+        "vol_ratio_7_21",
+        "near_high_200",
+        "adx_14"
+      ],
+      "auc": 0.6468623908737108,
+      "delta": 0.060721913780260595
+    },
+    {
+      "drop": "near_high_200",
+      "add": "close_loc_value",
+      "features": [
+        "rsi_14",
+        "obv_chg_z_20",
+        "bb_dist_lower",
+        "vol_ratio_7_21",
+        "med_term_21wk",
+        "close_loc_value"
+      ],
+      "auc": 0.6372380688315222,
+      "delta": 0.051097591738072046
+    },
+    {
+      "drop": "bb_dist_lower",
+      "add": "adx_14",
+      "features": [
+        "rsi_14",
+        "obv_chg_z_20",
+        "vol_ratio_7_21",
+        "near_high_200",
+        "med_term_21wk",
+        "adx_14"
+      ],
+      "auc": 0.6369305690240072,
+      "delta": 0.05079009193055706
+    },
+    {
+      "drop": "near_high_200",
+      "add": "body_ratio_ema3",
+      "features": [
+        "rsi_14",
+        "obv_chg_z_20",
+        "bb_dist_lower",
+        "vol_ratio_7_21",
+        "med_term_21wk",
+        "body_ratio_ema3"
+      ],
+      "auc": 0.6331371438863056,
+      "delta": 0.04699666679285541
+    },
+    {
+      "drop": "obv_chg_z_20",
+      "add": "close_loc_value",
+      "features": [
+        "rsi_14",
+        "bb_dist_lower",
+        "vol_ratio_7_21",
+        "near_high_200",
+        "med_term_21wk",
+        "close_loc_value"
+      ],
+      "auc": 0.6307505167209002,
+      "delta": 0.04461003962745003
+    },
+    {
+      "drop": "near_high_200",
+      "add": "fred_marshallian_k",
+      "features": [
+        "rsi_14",
+        "obv_chg_z_20",
+        "bb_dist_lower",
+        "vol_ratio_7_21",
+        "med_term_21wk",
+        "fred_marshallian_k"
+      ],
+      "auc": 0.6251682682867249,
+      "delta": 0.03902779119327471
+    },
+    {
+      "drop": "med_term_21wk",
+      "add": "close_loc_value",
+      "features": [
+        "rsi_14",
+        "obv_chg_z_20",
+        "bb_dist_lower",
+        "vol_ratio_7_21",
+        "near_high_200",
+        "close_loc_value"
+      ],
+      "auc": 0.624578943190235,
+      "delta": 0.03843846609678481
+    },
+    {
+      "drop": "near_high_200",
+      "add": "fred_yield_slope",
+      "features": [
+        "rsi_14",
+        "obv_chg_z_20",
+        "bb_dist_lower",
+        "vol_ratio_7_21",
+        "med_term_21wk",
+        "fred_yield_slope"
+      ],
+      "auc": 0.624370252040275,
+      "delta": 0.03822977494682478
+    },
+    {
+      "drop": "near_high_200",
+      "add": "fred_stress_z",
+      "features": [
+        "rsi_14",
+        "obv_chg_z_20",
+        "bb_dist_lower",
+        "vol_ratio_7_21",
+        "med_term_21wk",
+        "fred_stress_z"
+      ],
+      "auc": 0.6195905634125685,
+      "delta": 0.03345008631911828
+    },
+    {
+      "drop": "obv_chg_z_20",
+      "add": "fred_yield_slope",
+      "features": [
+        "rsi_14",
+        "bb_dist_lower",
+        "vol_ratio_7_21",
+        "near_high_200",
+        "med_term_21wk",
+        "fred_yield_slope"
+      ],
+      "auc": 0.6189786406355502,
+      "delta": 0.03283816354210001
+    },
+    {
+      "drop": "med_term_21wk",
+      "add": "wick_asym_ema3",
+      "features": [
+        "rsi_14",
+        "obv_chg_z_20",
+        "bb_dist_lower",
+        "vol_ratio_7_21",
+        "near_high_200",
+        "wick_asym_ema3"
+      ],
+      "auc": 0.6188160921994,
+      "delta": 0.03267561510594985
+    },
+    {
+      "drop": "near_high_200",
+      "add": "fred_real_yield",
+      "features": [
+        "rsi_14",
+        "obv_chg_z_20",
+        "bb_dist_lower",
+        "vol_ratio_7_21",
+        "med_term_21wk",
+        "fred_real_yield"
+      ],
+      "auc": 0.6176591955077827,
+      "delta": 0.031518718414332514
+    },
+    {
+      "drop": "obv_chg_z_20",
+      "add": "fred_real_yield",
+      "features": [
+        "rsi_14",
+        "bb_dist_lower",
+        "vol_ratio_7_21",
+        "near_high_200",
+        "med_term_21wk",
+        "fred_real_yield"
+      ],
+      "auc": 0.6138896563087595,
+      "delta": 0.027749179215309283
+    },
+    {
+      "drop": "obv_chg_z_20",
+      "add": "wick_asym_roll5",
+      "features": [
+        "rsi_14",
+        "bb_dist_lower",
+        "vol_ratio_7_21",
+        "near_high_200",
+        "med_term_21wk",
+        "wick_asym_roll5"
+      ],
+      "auc": 0.6126673519144028,
+      "delta": 0.026526874820952617
+    },
+    {
+      "drop": "med_term_21wk",
+      "add": "wick_asymmetry",
+      "features": [
+        "rsi_14",
+        "obv_chg_z_20",
+        "bb_dist_lower",
+        "vol_ratio_7_21",
+        "near_high_200",
+        "wick_asymmetry"
+      ],
+      "auc": 0.6114656041431289,
+      "delta": 0.02532512704967871
+    },
+    {
+      "drop": "obv_chg_z_20",
+      "add": "body_ratio_ema3",
+      "features": [
+        "rsi_14",
+        "bb_dist_lower",
+        "vol_ratio_7_21",
+        "near_high_200",
+        "med_term_21wk",
+        "body_ratio_ema3"
+      ],
+      "auc": 0.6114038591558135,
+      "delta": 0.025263382062363338
+    },
+    {
+      "drop": "obv_chg_z_20",
+      "add": "fred_marshallian_k",
+      "features": [
+        "rsi_14",
+        "bb_dist_lower",
+        "vol_ratio_7_21",
+        "near_high_200",
+        "med_term_21wk",
+        "fred_marshallian_k"
+      ],
+      "auc": 0.6111927708002622,
+      "delta": 0.025052293706812057
+    },
+    {
+      "drop": "obv_chg_z_20",
+      "add": "fred_stress_z",
+      "features": [
+        "rsi_14",
+        "bb_dist_lower",
+        "vol_ratio_7_21",
+        "near_high_200",
+        "med_term_21wk",
+        "fred_stress_z"
+      ],
+      "auc": 0.6075248732724439,
+      "delta": 0.02138439617899368
+    },
+    {
+      "drop": "near_high_200",
+      "add": "wick_asymmetry",
+      "features": [
+        "rsi_14",
+        "obv_chg_z_20",
+        "bb_dist_lower",
+        "vol_ratio_7_21",
+        "med_term_21wk",
+        "wick_asymmetry"
+      ],
+      "auc": 0.6069666539329872,
+      "delta": 0.020826176839537025
+    },
+    {
+      "drop": "med_term_21wk",
+      "add": "wick_asym_roll5",
+      "features": [
+        "rsi_14",
+        "obv_chg_z_20",
+        "bb_dist_lower",
+        "vol_ratio_7_21",
+        "near_high_200",
+        "wick_asym_roll5"
+      ],
+      "auc": 0.605846125314049,
+      "delta": 0.019705648220598837
+    },
+    {
+      "drop": "med_term_21wk",
+      "add": "fred_real_yield",
+      "features": [
+        "rsi_14",
+        "obv_chg_z_20",
+        "bb_dist_lower",
+        "vol_ratio_7_21",
+        "near_high_200",
+        "fred_real_yield"
+      ],
+      "auc": 0.6044252706940383,
+      "delta": 0.0182847936005881
+    },
+    {
+      "drop": "vol_ratio_7_21",
+      "add": "close_loc_value",
+      "features": [
+        "rsi_14",
+        "obv_chg_z_20",
+        "bb_dist_lower",
+        "near_high_200",
+        "med_term_21wk",
+        "close_loc_value"
+      ],
+      "auc": 0.6036790921904301,
+      "delta": 0.01753861509697996
+    },
+    {
+      "drop": "near_high_200",
+      "add": "wick_asym_ema3",
+      "features": [
+        "rsi_14",
+        "obv_chg_z_20",
+        "bb_dist_lower",
+        "vol_ratio_7_21",
+        "med_term_21wk",
+        "wick_asym_ema3"
+      ],
+      "auc": 0.6018471657975939,
+      "delta": 0.015706688704143712
+    },
+    {
+      "drop": "med_term_21wk",
+      "add": "fred_marshallian_k",
+      "features": [
+        "rsi_14",
+        "obv_chg_z_20",
+        "bb_dist_lower",
+        "vol_ratio_7_21",
+        "near_high_200",
+        "fred_marshallian_k"
+      ],
+      "auc": 0.6012179893728479,
+      "delta": 0.015077512279397687
+    },
+    {
+      "drop": "bb_dist_lower",
+      "add": "wick_asym_ema3",
+      "features": [
+        "rsi_14",
+        "obv_chg_z_20",
+        "vol_ratio_7_21",
+        "near_high_200",
+        "med_term_21wk",
+        "wick_asym_ema3"
+      ],
+      "auc": 0.6008880323626189,
+      "delta": 0.01474755526916871
+    },
+    {
+      "drop": "med_term_21wk",
+      "add": "fred_stress_z",
+      "features": [
+        "rsi_14",
+        "obv_chg_z_20",
+        "bb_dist_lower",
+        "vol_ratio_7_21",
+        "near_high_200",
+        "fred_stress_z"
+      ],
+      "auc": 0.5993204911495871,
+      "delta": 0.01318001405613689
+    },
+    {
+      "drop": "obv_chg_z_20",
+      "add": "wick_asym_ema3",
+      "features": [
+        "rsi_14",
+        "bb_dist_lower",
+        "vol_ratio_7_21",
+        "near_high_200",
+        "med_term_21wk",
+        "wick_asym_ema3"
+      ],
+      "auc": 0.5991550314734277,
+      "delta": 0.013014554379977561
+    },
+    {
+      "drop": "rsi_14",
+      "add": "adx_14",
+      "features": [
+        "obv_chg_z_20",
+        "bb_dist_lower",
+        "vol_ratio_7_21",
+        "near_high_200",
+        "med_term_21wk",
+        "adx_14"
+      ],
+      "auc": 0.5989171205044856,
+      "delta": 0.01277664341103546
+    },
+    {
+      "drop": "vol_ratio_7_21",
+      "add": "wick_asymmetry",
+      "features": [
+        "rsi_14",
+        "obv_chg_z_20",
+        "bb_dist_lower",
+        "near_high_200",
+        "med_term_21wk",
+        "wick_asymmetry"
+      ],
+      "auc": 0.5986602232410636,
+      "delta": 0.01251974614761342
+    },
+    {
+      "drop": "med_term_21wk",
+      "add": "body_ratio_ema3",
+      "features": [
+        "rsi_14",
+        "obv_chg_z_20",
+        "bb_dist_lower",
+        "vol_ratio_7_21",
+        "near_high_200",
+        "body_ratio_ema3"
+      ],
+      "auc": 0.597184313587249,
+      "delta": 0.011043836493798809
+    },
+    {
+      "drop": "vol_ratio_7_21",
+      "add": "body_ratio_ema3",
+      "features": [
+        "rsi_14",
+        "obv_chg_z_20",
+        "bb_dist_lower",
+        "near_high_200",
+        "med_term_21wk",
+        "body_ratio_ema3"
+      ],
+      "auc": 0.5965029020854922,
+      "delta": 0.010362424992041985
+    },
+    {
+      "drop": "near_high_200",
+      "add": "di_spread",
+      "features": [
+        "rsi_14",
+        "obv_chg_z_20",
+        "bb_dist_lower",
+        "vol_ratio_7_21",
+        "med_term_21wk",
+        "di_spread"
+      ],
+      "auc": 0.5962447706563887,
+      "delta": 0.010104293562938516
+    },
+    {
+      "drop": "med_term_21wk",
+      "add": "fred_yield_slope",
+      "features": [
+        "rsi_14",
+        "obv_chg_z_20",
+        "bb_dist_lower",
+        "vol_ratio_7_21",
+        "near_high_200",
+        "fred_yield_slope"
+      ],
+      "auc": 0.5956768907056025,
+      "delta": 0.009536413612152295
+    },
+    {
+      "drop": "obv_chg_z_20",
+      "add": "di_spread",
+      "features": [
+        "rsi_14",
+        "bb_dist_lower",
+        "vol_ratio_7_21",
+        "near_high_200",
+        "med_term_21wk",
+        "di_spread"
+      ],
+      "auc": 0.5943384000705186,
+      "delta": 0.00819792297706845
+    },
+    {
+      "drop": "obv_chg_z_20",
+      "add": "wick_asymmetry",
+      "features": [
+        "rsi_14",
+        "bb_dist_lower",
+        "vol_ratio_7_21",
+        "near_high_200",
+        "med_term_21wk",
+        "wick_asymmetry"
+      ],
+      "auc": 0.5933819458766214,
+      "delta": 0.007241468783171223
+    },
+    {
+      "drop": "near_high_200",
+      "add": "wick_asym_ema5",
+      "features": [
+        "rsi_14",
+        "obv_chg_z_20",
+        "bb_dist_lower",
+        "vol_ratio_7_21",
+        "med_term_21wk",
+        "wick_asym_ema5"
+      ],
+      "auc": 0.5931177708508836,
+      "delta": 0.006977293757433389
+    },
+    {
+      "drop": "bb_dist_lower",
+      "add": "close_loc_value",
+      "features": [
+        "rsi_14",
+        "obv_chg_z_20",
+        "vol_ratio_7_21",
+        "near_high_200",
+        "med_term_21wk",
+        "close_loc_value"
+      ],
+      "auc": 0.5920632111762167,
+      "delta": 0.0059227340827665564
+    },
+    {
+      "drop": "vol_ratio_7_21",
+      "add": "fred_stress_z",
+      "features": [
+        "rsi_14",
+        "obv_chg_z_20",
+        "bb_dist_lower",
+        "near_high_200",
+        "med_term_21wk",
+        "fred_stress_z"
+      ],
+      "auc": 0.5918620274877439,
+      "delta": 0.005721550394293673
+    },
+    {
+      "drop": "bb_dist_lower",
+      "add": "wick_asymmetry",
+      "features": [
+        "rsi_14",
+        "obv_chg_z_20",
+        "vol_ratio_7_21",
+        "near_high_200",
+        "med_term_21wk",
+        "wick_asymmetry"
+      ],
+      "auc": 0.5911024036348953,
+      "delta": 0.004961926541445116
+    },
+    {
+      "drop": "vol_ratio_7_21",
+      "add": "wick_asym_ema3",
+      "features": [
+        "rsi_14",
+        "obv_chg_z_20",
+        "bb_dist_lower",
+        "near_high_200",
+        "med_term_21wk",
+        "wick_asym_ema3"
+      ],
+      "auc": 0.5893787589910833,
+      "delta": 0.0032382818976330885
+    },
+    {
+      "drop": "vol_ratio_7_21",
+      "add": "fred_marshallian_k",
+      "features": [
+        "rsi_14",
+        "obv_chg_z_20",
+        "bb_dist_lower",
+        "near_high_200",
+        "med_term_21wk",
+        "fred_marshallian_k"
+      ],
+      "auc": 0.5888725696169075,
+      "delta": 0.002732092523457297
+    },
+    {
+      "drop": "bb_dist_lower",
+      "add": "body_ratio_ema3",
+      "features": [
+        "rsi_14",
+        "obv_chg_z_20",
+        "vol_ratio_7_21",
+        "near_high_200",
+        "med_term_21wk",
+        "body_ratio_ema3"
+      ],
+      "auc": 0.5887839826373776,
+      "delta": 0.002643505543927449
+    },
+    {
+      "drop": "vol_ratio_7_21",
+      "add": "di_spread",
+      "features": [
+        "rsi_14",
+        "obv_chg_z_20",
+        "bb_dist_lower",
+        "near_high_200",
+        "med_term_21wk",
+        "di_spread"
+      ],
+      "auc": 0.5874828017111705,
+      "delta": 0.0013423246177203252
+    },
+    {
+      "drop": "obv_chg_z_20",
+      "add": "wick_asym_ema5",
+      "features": [
+        "rsi_14",
+        "bb_dist_lower",
+        "vol_ratio_7_21",
+        "near_high_200",
+        "med_term_21wk",
+        "wick_asym_ema5"
+      ],
+      "auc": 0.5860803304366076,
+      "delta": -6.0146656842618995e-05
+    },
+    {
+      "drop": "vol_ratio_7_21",
+      "add": "fred_real_yield",
+      "features": [
+        "rsi_14",
+        "obv_chg_z_20",
+        "bb_dist_lower",
+        "near_high_200",
+        "med_term_21wk",
+        "fred_real_yield"
+      ],
+      "auc": 0.5858103775314267,
+      "delta": -0.0003300995620234559
+    },
+    {
+      "drop": "med_term_21wk",
+      "add": "wick_asym_ema5",
+      "features": [
+        "rsi_14",
+        "obv_chg_z_20",
+        "bb_dist_lower",
+        "vol_ratio_7_21",
+        "near_high_200",
+        "wick_asym_ema5"
+      ],
+      "auc": 0.5857106055654862,
+      "delta": -0.00042987152796403194
+    },
+    {
+      "drop": "rsi_14",
+      "add": "close_loc_value",
+      "features": [
+        "obv_chg_z_20",
+        "bb_dist_lower",
+        "vol_ratio_7_21",
+        "near_high_200",
+        "med_term_21wk",
+        "close_loc_value"
+      ],
+      "auc": 0.5849614568009992,
+      "delta": -0.001179020292450983
+    },
+    {
+      "drop": "bb_dist_lower",
+      "add": "fred_marshallian_k",
+      "features": [
+        "rsi_14",
+        "obv_chg_z_20",
+        "vol_ratio_7_21",
+        "near_high_200",
+        "med_term_21wk",
+        "fred_marshallian_k"
+      ],
+      "auc": 0.5818215595849675,
+      "delta": -0.004318917508482678
+    },
+    {
+      "drop": "med_term_21wk",
+      "add": "di_spread",
+      "features": [
+        "rsi_14",
+        "obv_chg_z_20",
+        "bb_dist_lower",
+        "vol_ratio_7_21",
+        "near_high_200",
+        "di_spread"
+      ],
+      "auc": 0.5803294739455103,
+      "delta": -0.005811003147939919
+    },
+    {
+      "drop": "bb_dist_lower",
+      "add": "wick_asym_roll5",
+      "features": [
+        "rsi_14",
+        "obv_chg_z_20",
+        "vol_ratio_7_21",
+        "near_high_200",
+        "med_term_21wk",
+        "wick_asym_roll5"
+      ],
+      "auc": 0.5797113653276631,
+      "delta": -0.006429111765787088
+    },
+    {
+      "drop": "vol_ratio_7_21",
+      "add": "wick_asym_ema5",
+      "features": [
+        "rsi_14",
+        "obv_chg_z_20",
+        "bb_dist_lower",
+        "near_high_200",
+        "med_term_21wk",
+        "wick_asym_ema5"
+      ],
+      "auc": 0.5759131554879651,
+      "delta": -0.010227321605485118
+    },
+    {
+      "drop": "vol_ratio_7_21",
+      "add": "fred_yield_slope",
+      "features": [
+        "rsi_14",
+        "obv_chg_z_20",
+        "bb_dist_lower",
+        "near_high_200",
+        "med_term_21wk",
+        "fred_yield_slope"
+      ],
+      "auc": 0.5742219709934152,
+      "delta": -0.011918506100034976
+    },
+    {
+      "drop": "bb_dist_lower",
+      "add": "fred_yield_slope",
+      "features": [
+        "rsi_14",
+        "obv_chg_z_20",
+        "vol_ratio_7_21",
+        "near_high_200",
+        "med_term_21wk",
+        "fred_yield_slope"
+      ],
+      "auc": 0.5730177009306028,
+      "delta": -0.013122776162847405
+    },
+    {
+      "drop": "rsi_14",
+      "add": "wick_asym_ema3",
+      "features": [
+        "obv_chg_z_20",
+        "bb_dist_lower",
+        "vol_ratio_7_21",
+        "near_high_200",
+        "med_term_21wk",
+        "wick_asym_ema3"
+      ],
+      "auc": 0.5711682955287126,
+      "delta": -0.014972181564737563
+    },
+    {
+      "drop": "bb_dist_lower",
+      "add": "fred_real_yield",
+      "features": [
+        "rsi_14",
+        "obv_chg_z_20",
+        "vol_ratio_7_21",
+        "near_high_200",
+        "med_term_21wk",
+        "fred_real_yield"
+      ],
+      "auc": 0.5695485608480991,
+      "delta": -0.016591916245351057
+    },
+    {
+      "drop": "vol_ratio_7_21",
+      "add": "wick_asym_roll5",
+      "features": [
+        "rsi_14",
+        "obv_chg_z_20",
+        "bb_dist_lower",
+        "near_high_200",
+        "med_term_21wk",
+        "wick_asym_roll5"
+      ],
+      "auc": 0.5691683002799668,
+      "delta": -0.016972176813483397
+    },
+    {
+      "drop": "rsi_14",
+      "add": "di_spread",
+      "features": [
+        "obv_chg_z_20",
+        "bb_dist_lower",
+        "vol_ratio_7_21",
+        "near_high_200",
+        "med_term_21wk",
+        "di_spread"
+      ],
+      "auc": 0.5678567088874209,
+      "delta": -0.018283768206029283
+    },
+    {
+      "drop": "bb_dist_lower",
+      "add": "di_spread",
+      "features": [
+        "rsi_14",
+        "obv_chg_z_20",
+        "vol_ratio_7_21",
+        "near_high_200",
+        "med_term_21wk",
+        "di_spread"
+      ],
+      "auc": 0.5662871356691364,
+      "delta": -0.01985334142431383
+    },
+    {
+      "drop": "rsi_14",
+      "add": "wick_asymmetry",
+      "features": [
+        "obv_chg_z_20",
+        "bb_dist_lower",
+        "vol_ratio_7_21",
+        "near_high_200",
+        "med_term_21wk",
+        "wick_asymmetry"
+      ],
+      "auc": 0.5658786501067279,
+      "delta": -0.020261826986722298
+    },
+    {
+      "drop": "rsi_14",
+      "add": "fred_stress_z",
+      "features": [
+        "obv_chg_z_20",
+        "bb_dist_lower",
+        "vol_ratio_7_21",
+        "near_high_200",
+        "med_term_21wk",
+        "fred_stress_z"
+      ],
+      "auc": 0.5625146535143708,
+      "delta": -0.023625823579079386
+    },
+    {
+      "drop": "bb_dist_lower",
+      "add": "fred_stress_z",
+      "features": [
+        "rsi_14",
+        "obv_chg_z_20",
+        "vol_ratio_7_21",
+        "near_high_200",
+        "med_term_21wk",
+        "fred_stress_z"
+      ],
+      "auc": 0.5624599686201248,
+      "delta": -0.023680508473325368
+    },
+    {
+      "drop": "rsi_14",
+      "add": "body_ratio_ema3",
+      "features": [
+        "obv_chg_z_20",
+        "bb_dist_lower",
+        "vol_ratio_7_21",
+        "near_high_200",
+        "med_term_21wk",
+        "body_ratio_ema3"
+      ],
+      "auc": 0.5612072323182129,
+      "delta": -0.024933244775237284
+    },
+    {
+      "drop": "rsi_14",
+      "add": "fred_real_yield",
+      "features": [
+        "obv_chg_z_20",
+        "bb_dist_lower",
+        "vol_ratio_7_21",
+        "near_high_200",
+        "med_term_21wk",
+        "fred_real_yield"
+      ],
+      "auc": 0.5580252265579195,
+      "delta": -0.028115250535530656
+    },
+    {
+      "drop": "bb_dist_lower",
+      "add": "wick_asym_ema5",
+      "features": [
+        "rsi_14",
+        "obv_chg_z_20",
+        "vol_ratio_7_21",
+        "near_high_200",
+        "med_term_21wk",
+        "wick_asym_ema5"
+      ],
+      "auc": 0.5572577567780806,
+      "delta": -0.028882720315369537
+    },
+    {
+      "drop": "rsi_14",
+      "add": "fred_marshallian_k",
+      "features": [
+        "obv_chg_z_20",
+        "bb_dist_lower",
+        "vol_ratio_7_21",
+        "near_high_200",
+        "med_term_21wk",
+        "fred_marshallian_k"
+      ],
+      "auc": 0.5557577636512689,
+      "delta": -0.03038271344218124
+    },
+    {
+      "drop": "rsi_14",
+      "add": "fred_yield_slope",
+      "features": [
+        "obv_chg_z_20",
+        "bb_dist_lower",
+        "vol_ratio_7_21",
+        "near_high_200",
+        "med_term_21wk",
+        "fred_yield_slope"
+      ],
+      "auc": 0.5545558313249154,
+      "delta": -0.031584645768534814
+    },
+    {
+      "drop": "rsi_14",
+      "add": "wick_asym_roll5",
+      "features": [
+        "obv_chg_z_20",
+        "bb_dist_lower",
+        "vol_ratio_7_21",
+        "near_high_200",
+        "med_term_21wk",
+        "wick_asym_roll5"
+      ],
+      "auc": 0.54984762738546,
+      "delta": -0.03629284970799018
+    },
+    {
+      "drop": "rsi_14",
+      "add": "wick_asym_ema5",
+      "features": [
+        "obv_chg_z_20",
+        "bb_dist_lower",
+        "vol_ratio_7_21",
+        "near_high_200",
+        "med_term_21wk",
+        "wick_asym_ema5"
+      ],
+      "auc": 0.536509773507039,
+      "delta": -0.049630703586411196
+    }
+  ],
+  "best": {
+    "drop": "near_high_200",
+    "add": "adx_14",
+    "features": [
+      "rsi_14",
+      "obv_chg_z_20",
+      "bb_dist_lower",
+      "vol_ratio_7_21",
+      "med_term_21wk",
+      "adx_14"
+    ],
+    "auc": 0.7020958565534643,
+    "delta": 0.11595537946001411
+  },
+  "accepted": true
+}

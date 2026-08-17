@@ -178,7 +178,7 @@ def build() -> str:
             g["BUY_ENTRY_SCORE_MIN"] = float(cfg.buy_entry_score_min)
             g["BUY_XGB_PROB_MIN"] = float(cfg.buy_entry_score_min)
             g["BUY_REQUIRE_LASSO_UP"] = bool(cfg.buy_require_lasso_up)
-            g["OUTPUT_DIR"] = g["REPO_ROOT"] / f"improves_{g['TICKER']}_{g['RUN_DATE']}"
+            g["OUTPUT_DIR"] = g["REPO_ROOT"] / "runs" / f"improves_{g['TICKER']}_{g['RUN_DATE']}"
             g["OUTPUT_DIR"].mkdir(parents=True, exist_ok=True)
             g["_N_JOBS_MODEL"] = int(cfg.n_jobs_model)
             os.environ.setdefault("OMP_NUM_THREADS", str(max(1, cfg.n_jobs_model)))

@@ -1,0 +1,25 @@
+{
+  "ticker": "GEV",
+  "model_id": "GEV__calibrated-20260814__20260814174059",
+  "target_session": "2026-08-17",
+  "feature_asof": "2026-08-14",
+  "close_asof": 1063.25,
+  "xgb_prob_up": 0.8776010870933533,
+  "xgb_pred_up": 1,
+  "lasso_pred_logret": 0.002124183823087513,
+  "lasso_implied_close": 1065.5109389246998,
+  "lasso_pred_up": 1,
+  "auto_invert": false,
+  "entry_score": 0.8776010870933533,
+  "entry_score_min": 0.81,
+  "decision": "BUY",
+  "rationale": "entry_score=87.8% \u2265 thr 81.0%  (raw P(up)=87.8%)",
+  "features": {
+    "rsi_14": 56.59880454075852,
+    "obv_chg_z_20": 0.6142664400228898,
+    "bb_dist_lower": 0.11586732109133417,
+    "vol_ratio_7_21": 0.7596664193421514,
+    "near_high_200": 0.8890496614318056,
+    "med_term_21wk": 0.0004861844695163548
+  }
+}
