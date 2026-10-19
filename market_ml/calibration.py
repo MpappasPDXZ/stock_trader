@@ -67,6 +67,29 @@ def is_pilot(ticker: str) -> bool:
     return ticker.upper().strip() in get_pilot_tickers()
 
 
+def get_inactive_tickers() -> list[str]:
+    """Tickers the user has hidden from the market landing page."""
+    return list(load_config().get("inactive", []))
+
+
+def is_inactive(ticker: str) -> bool:
+    return ticker.upper().strip() in get_inactive_tickers()
+
+
+def set_inactive(ticker: str, inactive: bool) -> list[str]:
+    """Add or remove a ticker from the inactive set. Returns the new inactive list."""
+    cfg = load_config()
+    t = ticker.upper().strip()
+    inactive_set: list[str] = list(cfg.get("inactive", []))
+    if inactive and t not in inactive_set:
+        inactive_set.append(t)
+    elif not inactive and t in inactive_set:
+        inactive_set = [x for x in inactive_set if x != t]
+    cfg["inactive"] = inactive_set
+    save_config(cfg)
+    return inactive_set
+
+
 # --------------------------------------------------------------------------- #
 # Calibration status — what was last calibrated for this ticker
 # --------------------------------------------------------------------------- #
@@ -136,9 +159,18 @@ def calibration_status(ticker: str, model_id: str | None = None) -> dict[str, An
             "oos_steps": fh.get("oos_steps"),
             "model_beats_null": fh.get("model_beats_null"),
             "high_vif_features": fh.get("high_vif_features", []),
-            "high_corr_pairs": fh.get("high_corr_pairs", []),
-            "uni": fh.get("uni", []),
-            "ablation": fh.get("ablation", []),
+            "high_corr_pairs": [
+                pair for pair in fh.get("high_corr_pairs", [])
+                if isinstance(pair.get("r"), (int, float))
+            ],
+            "uni": [
+                u for u in fh.get("uni", [])
+                if isinstance(u.get("oos_auc_oriented"), (int, float))
+            ],
+            "ablation": [
+                a for a in fh.get("ablation", [])
+                if isinstance(a.get("delta_vs_full"), (int, float))
+            ],
         },
     })
     return status
@@ -232,6 +264,8 @@ def calibrate(
         "features": active,
         "calibrated_at": time.time(),
         "is_discriminating": run_summary.get("is_discriminating"),
+        "oriented_auc": run_summary.get("oriented_auc"),
+        "raw_xgb_auc": run_summary.get("raw_xgb_auc"),
         "entry_score_min": run_summary.get("operating_entry_score_min"),
         "auto_invert": run_summary.get("auto_invert"),
         "decision": run_summary.get("decision"),
@@ -511,6 +545,7 @@ def _predict_live(
         ticker=ticker,
         predict_target_date=predict_target_date,
         n_jobs_model=2,
+        active_features=list(fs["FEATURE_COLS"]),
     )
 
     g, summary = run_stages(cfg, up_to="load_ohlcv")
@@ -557,7 +592,7 @@ def _predict_live(
     thr = float(fs.get("entry_score_min") or 0.72)
     enter = bool(np.isfinite(entry_score) and entry_score >= thr)
 
-    return {
+    result = {
         "ticker": ticker,
         "model_id": model_id,
         "target_session": str(PRED_TARGET_TS.date()),
@@ -572,6 +607,10 @@ def _predict_live(
         "entry_score": entry_score,
         "entry_score_min": thr,
         "decision": "BUY" if enter else "SKIP",
+        "rationale": (
+            f"entry_score={entry_score:.1%} {'≥' if enter else '<'} thr {thr:.1%}"
+            f"  (raw P(up)={xgb_p:.1%}{', inverted' if auto_invert else ''})"
+        ),
         "override_close": override_close,
         "live_bar": {
             "date": str(pd.Timestamp(live_bar.name).date()),
@@ -583,3 +622,37 @@ def _predict_live(
             "override_close": True,
         },
     }
+
+    # ------------------------------------------------------------------ #
+    # Run remaining stages (walkforward_pred → calibrate → buy_rule) and
+    # persist last_pred.json  — previously the live path computed the
+    # decision in memory only, leaving the run folder empty: run history
+    # showed decision None and the date page loaded no artifacts.
+    # ------------------------------------------------------------------ #
+    from pathlib import Path as _Path  # noqa: PLC0415
+
+    try:
+        _done = (
+            "setup", "load_ohlcv", "feature_registry",
+            "feat_rsi", "feat_vol_ratio", "feat_near_high", "feat_obv",
+            "feat_bb", "feat_trend", "feat_adx", "feat_candle", "feat_fred",
+            "assemble", "feature_health", "plot_01",
+        )
+        g, _chart_summary = run_stages(
+            cfg, up_to="buy_rule", skip=_done, _globals=g, quiet=True,
+        )
+        _out = g.get("OUTPUT_DIR")
+        if _out is not None:
+            result["output_dir"] = str(_out)
+            for _p in _Path(_out).glob(f"03_dir_hits_last*_{ticker}.png"):
+                result["chart_03"] = _p.name
+                break
+        if not _chart_summary.get("ok"):
+            result["chart_error"] = _chart_summary.get("error", "unknown")
+    except Exception as _ce:
+        result["chart_error"] = f"{type(_ce).__name__}: {_ce}"
+
+    # persist last_pred.json next to the model
+    mdir = _Path(bundle["dir"])
+    (mdir / "live_last_pred.json").write_text(json.dumps(result, indent=2, default=str))
+    return result

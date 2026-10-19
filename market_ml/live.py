@@ -265,6 +265,23 @@ def live_predict(
         today = datetime.now(_TZ).date()
         target_date = (pd.Timestamp(today) + pd.offsets.BDay(1)).strftime("%Y-%m-%d")
 
+    # Fail fast, BEFORE creating the run folder — a live predict with no live
+    # bar (pre-market/holiday/weekend) used to mkdir runs/improves_{T}_YYYY-MM-DD
+    # and then error out, littering empty future-dated folders.
+    if override_close is None:
+        live_bar_probe = fetch_live_bar(ticker)
+        if live_bar_probe is None:
+            today_ny = datetime.now(_NY_TZ).date()
+            if today_ny.weekday() >= 5:
+                raise RuntimeError(
+                    "Markets are closed (weekend) — live predict requires "
+                    "an open or recently-closed session."
+                )
+            raise RuntimeError(
+                f"No intraday data for {ticker} with today's date ({today_ny}). "
+                f"Market may be closed (holiday/pre-market) or ticker is invalid."
+            )
+
     cfg = RunConfig(
         ticker=ticker,
         predict_target_date=target_date,
