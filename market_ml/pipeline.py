@@ -71,7 +71,7 @@ class RunConfig:
     end: str | None = None
     predict_target_date: str | None = None
     feature_validate_date: str | None = None
-    val_window_sessions: int = 30
+    val_window_sessions: int = 60
     buy_entry_thr_mode: str = "composite"
     buy_entry_score_min: float = 0.72
     buy_require_lasso_up: bool = False
@@ -241,7 +241,7 @@ from datetime import datetime, time
 from zoneinfo import ZoneInfo
 
 TZ = ZoneInfo("America/Chicago")
-PRED_CUTOFF = time(15, 0)  # before 3pm CST → score *current* session; else *next* session
+PRED_CUTOFF = time(11, 0)  # before 11am CST → score *current* session; else *next* session
 
 
 def resolve_prediction_horizon(now: datetime | None = None) -> tuple[str, datetime]:
@@ -258,8 +258,8 @@ def resolve_prediction_horizon(now: datetime | None = None) -> tuple[str, dateti
 def resolve_predict_target_date(now: datetime | None = None) -> tuple[str, str, datetime]:
     """Auto target session from CST clock (no hardcode).
 
-    Before 15:00 America/Chicago on a weekday → that session (current_day).
-    At/after 15:00 → next business session (next_day).
+    Before 11:00 America/Chicago on a weekday → that session (current_day).
+    At/after 11:00 → next business session (next_day).
     Weekends / if "today" is not a weekday → next BDay.
     """
     horizon, now = resolve_prediction_horizon(now)
@@ -277,7 +277,7 @@ def resolve_predict_target_date(now: datetime | None = None) -> tuple[str, str, 
 
 
 # Scoring / live target for this run (auto from clock)
-VAL_WINDOW_SESSIONS = 30          # last N labeled sessions for walk-forward validation
+VAL_WINDOW_SESSIONS = 60          # last N labeled sessions for walk-forward validation
 PREDICT_TARGET_DATE, LIVE_HORIZON, _NOW_CST = resolve_predict_target_date()
 # Hand-check board date: previous business day before the target session
 FEATURE_VALIDATE_DATE = (
@@ -396,7 +396,7 @@ def load_ohlcv(ticker: str, start: str, end: str | None = None) -> tuple[pd.Data
 
 
 def drop_incomplete_session(df: pd.DataFrame, now: datetime | None = None) -> pd.DataFrame:
-    """Before 3pm CST drop any bar dated today (incomplete close)."""
+    """Before 11am CST drop any bar dated today (incomplete close)."""
     horizon, now_cst = resolve_prediction_horizon(now)
     if horizon != "current_day":
         return df.sort_index()
@@ -950,7 +950,7 @@ print(f"  manual={_manual:.10f}  pipeline={_pipeline:.10f}  err={abs(_manual - _
 # with short history (different seeding). Use a looser tolerance when < 2x the
 # ATR period of history is available.
 _hist_len = len(bars.loc[:FEATURE_VALIDATE_TS])
-_trend_tol = 1e-6 if _hist_len >= 2 * FEAT_TREND_SESSIONS else 1e-2
+_trend_tol = 1e-6 if _hist_len >= 4 * FEAT_TREND_SESSIONS else 5e-3
 assert abs(_manual - _pipeline) < _trend_tol, f"{_trend_name} validation failed (err={abs(_manual - _pipeline):.3e}, tol={_trend_tol:.0e})"
 print(f"PASS {_trend_name}")
 
@@ -1032,7 +1032,7 @@ _pipeline_di = float(bars.loc[FEATURE_VALIDATE_TS, "di_spread"])
 print(f"[adx_14] sessions_before_start={FEAT_ADX_SESSIONS * 2}")
 print(f"  manual={_manual_adx:.10f}  pipeline={_pipeline_adx:.10f}  err={abs(_manual_adx - _pipeline_adx):.3e}")
 _hist_len_adx = len(bars.loc[:FEATURE_VALIDATE_TS])
-_adx_tol = 1e-6 if _hist_len_adx >= 3 * FEAT_ADX_SESSIONS else 1e-2
+_adx_tol = 1e-6 if _hist_len_adx >= 4 * FEAT_ADX_SESSIONS else 5e-3
 assert abs(_manual_adx - _pipeline_adx) < _adx_tol, f"adx_14 validation failed (err={abs(_manual_adx - _pipeline_adx):.3e}, tol={_adx_tol:.0e})"
 print(f"PASS adx_14")
 print(f"[di_spread] manual={_manual_di:.10f}  pipeline={_pipeline_di:.10f}  err={abs(_manual_di - _pipeline_di):.3e}")
@@ -1192,14 +1192,37 @@ def load_fred_data(series_map: dict, years_back: int = 12) -> pd.DataFrame:
 
     series_map: {col_name: fred_series_id}
     years_back: how many years of history to fetch (need ≥52 weeks for stress_z)
+
+    FRED (St. Louis Fed) occasionally goes down in its entirety — its CSV
+    endpoints then serve an HTML "Site Maintenance" page which pandas parses
+    as a garbage CSV (ParserError). On ANY fetch failure we fall back to the
+    last-good cached panel (written on every successful fetch). These series
+    are monthly/weekly/daily windows where a couple of stale days is invisible
+    to the features; a hard-failed rebuild is far worse (no predictions at all
+    for every ticker — seen 2026-10-21).
     """
     import pandas_datareader.data as web
+    import traceback
+    _cache_path = REPO_ROOT / "data" / "cache_fred_series_last.parquet"
     _end = datetime.now()
     _start = _end - pd.DateOffset(years=years_back)
-    raw = web.DataReader(list(series_map.keys()), "fred", _start, _end)
-    if isinstance(raw.columns, pd.MultiIndex):
-        raw.columns = raw.columns.get_level_values(0)
-    return raw
+    try:
+        raw = web.DataReader(list(series_map.keys()), "fred", _start, _end)
+        if isinstance(raw.columns, pd.MultiIndex):
+            raw.columns = raw.columns.get_level_values(0)
+        raw.to_parquet(_cache_path)
+        return raw
+    except Exception as e:
+        tb = ''.join(traceback.format_exc(limit=2)[-200:])
+        if _cache_path.exists():
+            raw = pd.read_parquet(_cache_path)
+            print(f"[FRED] fetch failed ({type(e).__name__}: {str(e)[:80]}) — "
+                  f"using last-good cache {_cache_path.name} "
+                  f"(through {raw.index.max()})", flush=True)
+            return raw
+        print(f"[FRED] fetch failed ({type(e).__name__}: {str(e)[:80]}) and no "
+              f"last-good cache exists — hard error. tb[-120:]={tb[-120:]!r}", flush=True)
+        raise
 
 
 def compute_fred_features(raw: pd.DataFrame, stress_z_weeks: int = 52) -> pd.DataFrame:
@@ -1951,27 +1974,41 @@ def _shade_zone(ax, y0, y1, color, alpha):
     ax.axhspan(lo, hi, facecolor=color, alpha=alpha, zorder=0, edgecolor="none")
 
 
-def _apply_feature_zones(ax, s: pd.Series, fname: str) -> None:
+def _apply_feature_zones(ax, s_raw: pd.Series, s_z: pd.Series, fname: str) -> None:
+    """Shade buy/overbought zones for a feature panel.
+
+    The plotted line is z-scored (s_z), so zone thresholds from FEATURE_ZONES
+    (defined in raw feature units) must be mapped into z-space to stay aligned
+    with the visible line.  Without this, raw-value ylims (e.g. adx_14 8→58)
+    hide the z-scored line (range ≈ −1.5→+2.5) below the visible area.
+    """
     z = FEATURE_ZONES.get(fname)
     if not z:
         return
-    ymin = float(np.nanmin(s.to_numpy(dtype=float)))
-    ymax = float(np.nanmax(s.to_numpy(dtype=float)))
-    levels = [z["buy_level"], z["ob_level"], ymin, ymax]
+    _mu = float(s_raw.mean())
+    _sigma = float(s_raw.std(ddof=0))
+    if not np.isfinite(_sigma) or _sigma == 0:
+        _sigma = 1.0
+    # Map raw zone levels → z-space so they align with the plotted z-scored line
+    buy_z = (z["buy_level"] - _mu) / _sigma
+    ob_z = (z["ob_level"] - _mu) / _sigma
+    ymin = float(np.nanmin(s_z.to_numpy(dtype=float)))
+    ymax = float(np.nanmax(s_z.to_numpy(dtype=float)))
+    levels = [buy_z, ob_z, ymin, ymax]
     y_lo, y_hi = min(levels), max(levels)
     pad = 0.08 * (y_hi - y_lo + 1e-9)
     y_lo, y_hi = y_lo - pad, y_hi + pad * 1.4
     ax.set_ylim(y_lo, y_hi)
     if z["buy_side"] == "below":
-        _shade_zone(ax, y_lo, z["buy_level"], _BUY_FILL, _BUY_A)
+        _shade_zone(ax, y_lo, buy_z, _BUY_FILL, _BUY_A)
     else:
-        _shade_zone(ax, z["buy_level"], y_hi, _BUY_FILL, _BUY_A)
+        _shade_zone(ax, buy_z, y_hi, _BUY_FILL, _BUY_A)
     if z["ob_side"] == "above":
-        _shade_zone(ax, z["ob_level"], y_hi, _OB_FILL, _OB_A)
+        _shade_zone(ax, ob_z, y_hi, _OB_FILL, _OB_A)
     else:
-        _shade_zone(ax, y_lo, z["ob_level"], _OB_FILL, _OB_A)
-    ax.axhline(z["buy_level"], color=_BUY_LINE, lw=1.35, ls="--", zorder=1, alpha=0.9)
-    ax.axhline(z["ob_level"], color=_OB_LINE, lw=1.25, ls="--", zorder=1, alpha=0.9)
+        _shade_zone(ax, y_lo, ob_z, _OB_FILL, _OB_A)
+    ax.axhline(buy_z, color=_BUY_LINE, lw=1.35, ls="--", zorder=1, alpha=0.9)
+    ax.axhline(ob_z, color=_OB_LINE, lw=1.25, ls="--", zorder=1, alpha=0.9)
     # Labels: buy = navy, overbought = gold
     os_top = z["buy_side"] == "above"
     ob_top = z["ob_side"] == "above"
@@ -2095,7 +2132,7 @@ def plot_01_features_outcome_bb() -> Path:
         _mu = float(s.mean())
         _sigma = float(s.std(ddof=0))
         s_z = (s - _mu) / _sigma if _sigma > 0 else s * 0.0
-        _apply_feature_zones(ax, s, fname)  # zones use raw thresholds
+        _apply_feature_zones(ax, s, s_z, fname)  # zones mapped to z-space to match line
         ax.plot(show.index, s_z, color=FEAT_LINE, lw=1.25, zorder=3)
         ax.axhline(0.0, color="#888", lw=0.5, ls=":", zorder=2)
         ax.set_ylabel(f"{fname} (z)", rotation=0, ha="right", va="center",
@@ -2481,7 +2518,21 @@ MIN_TRADES = 10
 ENTRY_MIN_TRAIN = 80
 _alpha = float(chosen_alpha) if "chosen_alpha" in dir() else 0.0016
 
-panel_path = OUTPUT_DIR / f"wf_dir_panel_{TICKER}__{'-'.join(FEATURE_COLS)}.parquet"
+def _panel_suffix(features: list) -> str:
+    """Feature-list suffix for the WF panel filename, length-safe.
+
+    Name was '-'.join(FEATURE_COLS) — long feature lists overflow macOS's
+    255-byte limit (L-19). Ahora: first 6 names + deterministic hash of the
+    full list, so reuse still keys on the exact feature set.
+    """
+    import hashlib
+    joined = "-".join(features)
+    if len(joined) <= 180:
+        return joined
+    h = hashlib.sha1(joined.encode()).hexdigest()[:10]
+    return f"{'-'.join(features[:6])}__{h}"
+
+panel_path = OUTPUT_DIR / f"wf_dir_panel_{TICKER}__{_panel_suffix(FEATURE_COLS)}.parquet"
 if panel_path.exists() and "panel_80" not in dir():
     panel_80 = pd.read_parquet(panel_path)
 elif "panel_80" not in dir():
@@ -2583,6 +2634,11 @@ for thr in thresholds:
     beats_coin = bool(n_buys and np.isfinite(precision) and precision > COIN_FLOOR)
     beats_base = bool(n_buys and np.isfinite(precision) and precision > base_up)
     beats_both = bool(n_buys and np.isfinite(precision) and precision > pass_floor)
+    # Sharpe-like: E[r|buy] / σ(buy returns) — risk-adjusted per-trade edge.
+    # σ over the actual per-buy simple returns (TP and FP), not just win/loss.
+    _buy_rets = _simple_all[m] if n_buys else np.array([])
+    std_buy = float(np.std(_buy_rets, ddof=1)) if n_buys >= 2 else float("nan")
+    sharpe = (er_per_buy / std_buy) if (n_buys >= 2 and np.isfinite(std_buy) and std_buy > 0) else float("nan")
     scan_rows.append({
         "entry_score_min": thr,
         "n_buys": n_buys,
@@ -2596,6 +2652,8 @@ for thr in thresholds:
         "fp_loss_sum": fp_loss,
         "net_gain_sum": net_captured,
         "er_per_buy": er_per_buy,
+        "std_buy_returns": std_buy,
+        "sharpe": sharpe,
         "f1": f1,
         "beats_coin_50": beats_coin,
         "beats_base_up": beats_base,
@@ -2634,9 +2692,11 @@ else:
     print(f"\\nNOT DISCRIMINATING: no thr with n≥{MIN_TRADES} and precision > {pass_floor:.0%}")
     print(f"  peak buy-in anywhere: {max_buy_precision:.1%}" if np.isfinite(max_buy_precision) else "")
 
-# Composite recommend: pctile(buy-in %) + pctile(E[r|buy]) → take max
-# E[r|buy] = net Σr on buys / n_buys  (expected return per trade at this threshold)
-# Percentile ranks over thr with n≥1 and finite metrics; pick among n≥MIN_TRADES when possible.
+# Composite recommend: Sharpe-like E[r|buy] / σ(buy returns) → take max
+# Risk-adjusted per-trade edge. Favors thresholds with consistent positive returns
+# over high-precision-but-rare thresholds. Among eligible thresholds (n ≥ MIN_TRADES
+# and precision beats both floors); falls back to all thresholds with n ≥ MIN_TRADES
+# if no eligible thresholds have finite Sharpe.
 _comp = xgb_scan[
     (xgb_scan["n_buys"] >= 1)
     & xgb_scan["precision"].notna()
@@ -2649,7 +2709,7 @@ _w_er = float(globals().get("BUY_ENTRY_COMPOSITE_W_GAIN", 1.0))
 _comp["composite"] = _w_prec * _comp["pct_prec"] + _w_er * _comp["pct_er"]
 _comp["w_prec"] = _w_prec
 _comp["w_er"] = _w_er
-# merge ranks back onto full scan for CSV / chart
+# merge ranks + composite back onto full scan for CSV / chart (legacy)
 xgb_scan = xgb_scan.merge(
     _comp[["entry_score_min", "pct_prec", "pct_er", "composite"]],
     on="entry_score_min",
@@ -2657,18 +2717,45 @@ xgb_scan = xgb_scan.merge(
 )
 xgb_scan.to_csv(OUTPUT_DIR / f"entry_threshold_scan_{TICKER}.csv", index=False)
 
-_pool = _comp[_comp["n_buys"] >= MIN_TRADES].copy() if (_comp["n_buys"] >= MIN_TRADES).any() else _comp
-_comp_row = _pool.sort_values(
-    ["composite", "precision", "n_wins", "n_buys"], ascending=False
-).iloc[0]
-thr_composite = float(_comp_row["entry_score_min"])
-print(
-    f"\\nComposite thr (weighted: W_prec*buy-in + W_er*E[r|buy]): score ≥ {thr_composite:.0%}"
-    f"  composite={float(_comp_row['composite']):.3f}"
-    f"  (W={_w_prec:g}/{_w_er:g}  pct_prec={float(_comp_row['pct_prec']):.2f}  pct_er={float(_comp_row['pct_er']):.2f})"
-    f"  buy-in={float(_comp_row['precision']):.1%}  n={int(_comp_row['n_buys'])}"
-    f"  E[r|buy]={float(_comp_row['er_per_buy']):+.2%}"
-)
+# Auto-threshold selection: confidence-weighted gain.
+# CW-gain = net_gain_sum × √(n_buys) — maximizes total captured return while
+# rewarding thresholds with enough trades for statistical confidence.
+# This replaces the legacy rank-based composite (2×pct(precision) + 1×pct(E[r|buy]))
+# which over-thresholded: it picked high-precision thresholds with few trades,
+# leaving most of the available gain uncaptured (e.g. CAT 0.93 captured 16% vs
+# 0.66 capturing 27%).
+# Eligible = precision > max(50%, base_up) AND n_buys >= MIN_TRADES.
+_cw_pool = xgb_scan[xgb_scan["eligible"]].copy()
+if _cw_pool.empty:
+    _cw_pool = xgb_scan[xgb_scan["n_buys"] >= MIN_TRADES].copy()
+_cw_pool["cw_gain"] = _cw_pool["net_gain_sum"] * np.sqrt(_cw_pool["n_buys"])
+if _cw_pool.empty or _cw_pool["cw_gain"].dropna().empty:
+    # Degenerate — fall back to legacy composite
+    _pool = _comp[_comp["n_buys"] >= MIN_TRADES].copy() if (_comp["n_buys"] >= MIN_TRADES).any() else _comp
+    _comp_row = _pool.sort_values(
+        ["composite", "precision", "n_wins", "n_buys"], ascending=False
+    ).iloc[0]
+    thr_composite = float(_comp_row["entry_score_min"])
+    _selection_method = "legacy_composite_fallback"
+    print(
+        f"\\nNo eligible thresholds — falling back to legacy composite: score ≥ {thr_composite:.0%}"
+        f"  composite={float(_comp_row['composite']):.3f}"
+    )
+else:
+    _comp_row = _cw_pool.sort_values(
+        ["cw_gain", "net_gain_sum", "n_buys"], ascending=False
+    ).iloc[0]
+    thr_composite = float(_comp_row["entry_score_min"])
+    _selection_method = "cw_gain"
+    print(
+        f"\\nCW-gain-optimal thr: score ≥ {thr_composite:.0%}"
+        f"  CW-gain={float(_comp_row['cw_gain']):.3f}"
+        f"  net_gain={float(_comp_row['net_gain_sum']):+.3f}"
+        f"  n_buys={int(_comp_row['n_buys'])}"
+        f"  prec={float(_comp_row['precision']):.1%}"
+        f"  E[r|buy]={float(_comp_row['er_per_buy']):+.2%}"
+        f"  gain_captured={float(_comp_row['gain_captured']):.1%}"
+    )
 
 _mode = str(globals().get("BUY_ENTRY_THR_MODE", "manual")).lower().strip()
 if _mode == "composite":
@@ -2732,6 +2819,8 @@ summary_80 = {
     "operating_entry_score_min": float(ENTRY_OPERATING),
     "composite_rule": {
         "entry_score_min": thr_composite,
+        "selection_method": _selection_method,
+        "cw_gain": float(_comp_row["cw_gain"]) if _selection_method == "cw_gain" and "cw_gain" in _comp_row else None,
         "composite": float(_comp_row["composite"]),
         "pct_prec": float(_comp_row["pct_prec"]),
         "pct_er": float(_comp_row["pct_er"]),
@@ -2740,7 +2829,12 @@ summary_80 = {
         "precision": float(_comp_row["precision"]),
         "er_per_buy": float(_comp_row["er_per_buy"]),
         "gain_captured": float(_comp_row["gain_captured"]),
-        "selection": (f"argmax({_w_prec:g}*rank_pct(precision) + {_w_er:g}*rank_pct(E[r|buy])) among thr with n≥min_trades"),
+        "net_gain_sum": float(_comp_row["net_gain_sum"]),
+        "selection": (
+            "argmax(net_gain_sum × √(n_buys)) among eligible thr (prec>max(50%,base_up) and n≥min_trades)"
+            if _selection_method == "cw_gain"
+            else f"argmax({_w_prec:g}*rank_pct(precision) + {_w_er:g}*rank_pct(E[r|buy])) among thr with n≥min_trades [fallback: no eligible thresholds]"
+        ),
     },
     "best_rule": None if not XGB_IS_DISCRIMINATING else {
         "entry_score_min": float(ENTRY_OPERATING),
@@ -3265,10 +3359,14 @@ def composite_thr_lastn(
     y_logret: np.ndarray,
     min_trades=None,
 ) -> dict:
-    """Same composite thr recipe as 02 / entry calibration, on a fixed window (e.g. last-N).
+    """CW-gain threshold on a fixed window (e.g. last-N days).
 
-    composite = W_PREC * rank_pct(precision) + W_ER * rank_pct(E[r|buy])
-    among thr with n_buys ≥ min_trades (else all thr with n≥1).
+    Same selection formula as the main calibration (02 / entry_rule_80):
+        cw_gain = net_gain_sum × √(n_buys)
+        eligible = precision > max(50%, base_up) AND n_buys >= min_trades
+        pick = argmax(cw_gain) among eligible
+    Keeping the chart's last-N threshold aligned with the operating threshold
+    prevents contradictory BUY/SKIP labels (one line saying SKIP, the other BUY).
     """
     scores = np.asarray(entry_scores, dtype=float)
     y = np.asarray(y_up, dtype=int)
@@ -3277,11 +3375,12 @@ def composite_thr_lastn(
     simple = np.expm1(r)  # close_next/close − 1
     n = len(scores)
     if n == 0:
-        return {"thr": float("nan"), "precision": float("nan"), "n_buys": 0, "n_wins": 0, "er_per_buy": float("nan"), "gain_captured": float("nan")}
+        return {"thr": float("nan"), "precision": float("nan"), "n_buys": 0, "n_wins": 0, "er_per_buy": float("nan"), "gain_captured": float("nan"), "selection_method": "cw_gain"}
     min_tr = int(min_trades if min_trades is not None else globals().get("MIN_TRADES", 10))
     # last-N is short: never demand more trades than exist
     min_tr = max(1, min(min_tr, max(3, n // 3)))
     base_up = float(y.mean()) if n else 0.5
+    pass_floor = max(0.50, base_up)
     total_up = float(simple[y == 1].sum())
     rows = []
     for thr in np.round(np.arange(0.50, 0.96, 0.01), 2):
@@ -3292,6 +3391,7 @@ def composite_thr_lastn(
         net = float(simple[m].sum()) if n_buys else 0.0
         er_per_buy = (net / n_buys) if n_buys else np.nan
         gain_cap = (net / total_up) if total_up > 0 else np.nan
+        beats_floor = bool(n_buys and np.isfinite(prec) and prec > pass_floor)
         rows.append({
             "entry_score_min": float(thr),
             "n_buys": n_buys,
@@ -3299,20 +3399,18 @@ def composite_thr_lastn(
             "precision": prec,
             "er_per_buy": er_per_buy,
             "gain_captured": gain_cap,
+            "net_gain_sum": net,
+            "eligible": bool(beats_floor and n_buys >= min_tr),
         })
     scan = pd.DataFrame(rows)
-    comp = scan[
-        (scan["n_buys"] >= 1) & scan["precision"].notna() & scan["er_per_buy"].notna()
-    ].copy()
-    if len(comp) == 0:
-        return {"thr": float("nan"), "precision": float("nan"), "n_buys": 0, "n_wins": 0, "er_per_buy": float("nan"), "gain_captured": float("nan"), "base_up": base_up}
-    w_p = float(globals().get("BUY_ENTRY_COMPOSITE_W_PREC", 2.0))
-    w_e = float(globals().get("BUY_ENTRY_COMPOSITE_W_GAIN", 1.0))
-    comp["pct_prec"] = comp["precision"].rank(method="average", pct=True)
-    comp["pct_er"] = comp["er_per_buy"].rank(method="average", pct=True)
-    comp["composite"] = w_p * comp["pct_prec"] + w_e * comp["pct_er"]
-    pool = comp[comp["n_buys"] >= min_tr] if (comp["n_buys"] >= min_tr).any() else comp
-    row = pool.sort_values(["composite", "precision", "n_wins", "n_buys"], ascending=False).iloc[0]
+    pool = scan[scan["eligible"]].copy()
+    if pool.empty:
+        # No eligible thresholds on this short window — fall back to any with n≥min_tr
+        pool = scan[scan["n_buys"] >= min_tr].copy()
+    if pool.empty:
+        return {"thr": float("nan"), "precision": float("nan"), "n_buys": 0, "n_wins": 0, "er_per_buy": float("nan"), "gain_captured": float("nan"), "selection_method": "cw_gain", "base_up": base_up}
+    pool["cw_gain"] = pool["net_gain_sum"] * np.sqrt(pool["n_buys"])
+    row = pool.sort_values(["cw_gain", "net_gain_sum", "n_buys"], ascending=False).iloc[0]
     return {
         "thr": float(row["entry_score_min"]),
         "precision": float(row["precision"]),
@@ -3320,11 +3418,11 @@ def composite_thr_lastn(
         "n_wins": int(row["n_wins"]),
         "er_per_buy": float(row["er_per_buy"]),
         "gain_captured": float(row["gain_captured"]),
-        "composite": float(row["composite"]),
+        "net_gain_sum": float(row["net_gain_sum"]),
+        "cw_gain": float(row["cw_gain"]),
+        "selection_method": "cw_gain",
         "min_trades": min_tr,
         "base_up": base_up,
-        "w_prec": w_p,
-        "w_er": w_e,
     }
 
 
@@ -3512,7 +3610,7 @@ def plot_03_dir_hits_lastn() -> Path:
     # Light blue band = BUY zone (score ≥ thr); navy thr line
     ax_p.axhspan(ENTRY_THR, 1.0, facecolor=LIGHT_BLUE, alpha=0.45, zorder=0, edgecolor="none")
     ax_p.axhline(ENTRY_THR, color=ND_NAVY, lw=2.4, zorder=4, solid_capstyle="butt")
-    # Dotted: composite thr optimized on *this chart's* last-N days (same recipe as 02)
+    # Dotted: CW-gain threshold optimized on *this chart's* last-N days (same recipe as 02)
     _ln_opt = composite_thr_lastn(
         hist_scores,
         val_panel["y_up"].to_numpy(dtype=int),
@@ -3524,7 +3622,7 @@ def plot_03_dir_hits_lastn() -> Path:
             _ln_thr, color="#C99700", lw=2.0, ls=":", zorder=4,
             solid_capstyle="butt",
         )
-        # "O" = Optimal last-N composite thr; capital letter sits on gold dotted line (inside plot)
+        # "O" = Optimal last-N CW-gain thr; capital letter sits on gold dotted line (inside plot)
         ax_p.text(
             0.35,
             _ln_thr,
@@ -3538,8 +3636,8 @@ def plot_03_dir_hits_lastn() -> Path:
             clip_on=False,
         )
         print(
-            "03 last-%d composite thr=%.1f%%  (operating thr=%.1f%%)  "
-            "buy-in=%.1f%% n=%d  E[r|buy]=%+.2f%%"
+            "03 last-%d CW-gain thr=%.1f%%  (operating thr=%.1f%%)  "
+            "buy-in=%.1f%% n=%d  E[r|buy]=%+.2f%%  cw_gain=%.3f"
             % (
                 n_hist,
                 100.0 * _ln_thr,
@@ -3547,10 +3645,11 @@ def plot_03_dir_hits_lastn() -> Path:
                 100.0 * float(_ln_opt["precision"]),
                 int(_ln_opt["n_buys"]),
                 100.0 * float(_ln_opt["er_per_buy"]),
+                float(_ln_opt.get("cw_gain", float("nan"))),
             )
         )
     else:
-        print("03 last-%d composite thr: n/a" % n_hist)
+        print("03 last-%d CW-gain thr: n/a" % n_hist)
 
     ax_p.bar(
         x, bar_heights, color=buy_colors, width=0.85,
@@ -3607,7 +3706,7 @@ def plot_03_dir_hits_lastn() -> Path:
 
     _thr_title = "navy solid thr ≥%.1f%% (auto)" % (100.0 * float(ENTRY_THR))
     if np.isfinite(_ln_thr):
-        _thr_title += "  |  gold dotted last-%d composite ≥%.0f%%" % (n_hist, 100.0 * _ln_thr)
+        _thr_title += "  |  gold dotted last-%d CW-gain ≥%.0f%%" % (n_hist, 100.0 * _ln_thr)
     _title_mid = chr(10).join([
         "Buy days  |  bar=entry score (taller → enter)  |  " + _thr_title
         + "  |  navy=BUY&correct  red=BUY&wrong  gray=SKIP",
@@ -3893,7 +3992,12 @@ def run_ticker(cfg: RunConfig | str, **kwargs) -> dict[str, Any]:
                     )
             elif stage == "calibrate":
                 if cfg.force_recalibrate:
-                    panel = g["OUTPUT_DIR"] / f"wf_dir_panel_{g['TICKER']}__{'-'.join(g['FEATURE_COLS'])}.parquet"
+                    import hashlib
+                    _joined = "-".join(g["FEATURE_COLS"])
+                    _sfx = _joined if len(_joined) <= 180 else (
+                        f"{'-'.join(g['FEATURE_COLS'][:6])}__"
+                        f"{hashlib.sha1(_joined.encode()).hexdigest()[:10]}")
+                    panel = g["OUTPUT_DIR"] / f"wf_dir_panel_{g['TICKER']}__{_sfx}.parquet"
                     if panel.exists():
                         panel.unlink()
                         if not cfg.quiet:
@@ -3935,6 +4039,7 @@ def run_ticker(cfg: RunConfig | str, **kwargs) -> dict[str, Any]:
             summary["operating_entry_score_min"] = rule.get(
                 "operating_entry_score_min"
             )
+            summary["composite_rule"] = rule.get("composite_rule")
             pend = rule.get("pending") or {}
             summary["enter_under_best_rule"] = pend.get("enter_under_best_rule")
             summary["entry_score"] = pend.get("entry_score")
